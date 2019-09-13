@@ -1,0 +1,3 @@
+<launch>
+  <node pkg="riptide_controllers" type="alignment_controller.py" name="alignment_controller" output="screen" />
+</launch>
