@@ -82,7 +82,7 @@ void DepthController::LoadParam(string param, T &var)
 void DepthController::UpdateError()
 {
   sample_duration = ros::Time::now() - sample_start;
-  dt = sample_duration.toSec();
+  dt = sample_duration.toSec() + 0.000000001;
 
   if (pid_depth_active)
   {
