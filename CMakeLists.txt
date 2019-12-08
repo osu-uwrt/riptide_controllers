@@ -49,6 +49,7 @@ add_action_files(
   GateManeuver.action
   GetDistance.action
   Align.action
+  ThrusterTest.action
 )
 
 generate_messages(
