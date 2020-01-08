@@ -15,7 +15,7 @@
 #include "geometry_msgs/Vector3.h"
 #include "geometry_msgs/Vector3Stamped.h"
 #include "geometry_msgs/Accel.h"
-#include "riptide_msgs/Imu.h"
+#include "sensor_msgs/Imu.h"
 #include "riptide_msgs/Depth.h"
 #include "riptide_msgs/ThrustStamped.h"
 #include "riptide_msgs/NetLoad.h"
@@ -23,6 +23,7 @@
 #include <yaml-cpp/yaml.h>
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Core"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 using namespace Eigen;
 using namespace std;
 
@@ -86,7 +87,7 @@ public:
   void SetThrusterCoeffs();
   void InitThrustMsg();
   void DynamicReconfigCallback(riptide_controllers::VehiclePropertiesConfig &config, uint32_t levels);
-  void ImuCB(const riptide_msgs::Imu::ConstPtr &imu_msg);
+  void ImuCB(const sensor_msgs::Imu::ConstPtr &imu_msg);
   void DepthCB(const riptide_msgs::Depth::ConstPtr &depth_msg);
   void NetLoadCB(const riptide_msgs::NetLoad::ConstPtr &load_msg);
   void Loop();

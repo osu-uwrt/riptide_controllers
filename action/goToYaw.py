@@ -2,8 +2,12 @@
 import rospy
 import actionlib
 
-from riptide_msgs.msg import AttitudeCommand, Imu
+from riptide_msgs.msg import AttitudeCommand
+from sensor_msgs.msg import Imu
 import riptide_controllers.msg
+from tf.transformations import euler_from_quaternion
+import math
+import numpy as np
 
 def angleDiff(a1, a2):
     return (a1 - a2 + 180) % 360 - 180
@@ -15,12 +19,16 @@ class GoToYawAction(object):
         self._as = actionlib.SimpleActionServer("go_to_yaw", riptide_controllers.msg.GoToYawAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
+    def imuToEuler(self, msg):
+        quat = msg.orientation
+        quat = [quat.x, quat.y, quat.z, quat.w]
+        return np.array(euler_from_quaternion(quat)) * 180 / math.pi
       
     def execute_cb(self, goal):
         rospy.loginfo("Going to Yaw " + str(goal.yaw)+ " deg")
         self.yawPub.publish(goal.yaw, AttitudeCommand.POSITION)
 
-        while abs(angleDiff(rospy.wait_for_message("/state/imu", Imu).rpy_deg.z, goal.yaw)) > 5:
+        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("/imu/data", Imu))[2], goal.yaw)) > 5:
             rospy.sleep(0.05)
 
             if self._as.is_preempt_requested():

@@ -7,9 +7,10 @@
 #include "tf/transform_listener.h"
 #include "riptide_msgs/Depth.h"
 #include "riptide_msgs/DepthCommand.h"
-#include "riptide_msgs/Imu.h"
+#include "sensor_msgs/Imu.h"
 #include "riptide_msgs/ResetControls.h"
 #include "riptide_msgs/ControlStatus.h"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 using namespace std;
 
 class DepthController
@@ -29,9 +30,7 @@ class DepthController
 
     riptide_msgs::ControlStatus status_msg;
 
-    tf::Matrix3x3 R_b2w, R_w2b;
-    tf::Vector3 tf;
-    float phi, theta;
+    tf2::Quaternion quat;
 
     //PID
     double depth_error, depth_error_dot;
@@ -55,7 +54,7 @@ class DepthController
     void LoadParam(string param, T &var);
     void CommandCB(const riptide_msgs::DepthCommand::ConstPtr &cmd);
     void DepthCB(const riptide_msgs::Depth::ConstPtr &depth_msg);
-    void ImuCB(const riptide_msgs::Imu::ConstPtr &imu_msg);
+    void ImuCB(const sensor_msgs::Imu::ConstPtr &imu_msg);
  };
 
  #endif

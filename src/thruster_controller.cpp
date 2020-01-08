@@ -33,7 +33,7 @@ ThrusterController::ThrusterController() : nh("~")
     Fb_vector[i] = 0;
   }
 
-  state_sub = nh.subscribe<riptide_msgs::Imu>("/state/imu", 1, &ThrusterController::ImuCB, this);
+  state_sub = nh.subscribe<sensor_msgs::Imu>("/imu/data", 1, &ThrusterController::ImuCB, this);
   depth_sub = nh.subscribe<riptide_msgs::Depth>("/state/depth", 1, &ThrusterController::DepthCB, this);
   cmd_sub = nh.subscribe<riptide_msgs::NetLoad>("/command/net_load", 1, &ThrusterController::NetLoadCB, this);
   cob_pub = nh.advertise<geometry_msgs::Vector3Stamped>("/properties/cob", 1);
@@ -181,14 +181,18 @@ void ThrusterController::DynamicReconfigCallback(riptide_controllers::VehiclePro
   Fb = config.Buoyant_Force;
 }
 
-void ThrusterController::ImuCB(const riptide_msgs::Imu::ConstPtr &imu_msg)
+void ThrusterController::ImuCB(const sensor_msgs::Imu::ConstPtr &imu_msg)
 {
-  float phi = imu_msg->rpy_deg.x * PI / 180;
-  float theta = imu_msg->rpy_deg.y * PI / 180;
+  tf2::Quaternion quat;
+  tf2::fromMsg(imu_msg->orientation, quat);
+  double yaw, pitch, roll;
+  tf2::Matrix3x3 mat(quat);
+  mat.getRPY(roll, pitch, yaw);
+  
   Vector3d angular_vel;
-  angular_vel[0] = imu_msg->ang_vel_deg.x * PI / 180;
-  angular_vel[1] = imu_msg->ang_vel_deg.y * PI / 180;
-  angular_vel[2] = imu_msg->ang_vel_deg.z * PI / 180;
+  angular_vel[0] = imu_msg->angular_velocity.x;
+  angular_vel[1] = imu_msg->angular_velocity.y;
+  angular_vel[2] = imu_msg->angular_velocity.z;
 
   transportThm[3] = -angular_vel[1] * angular_vel[2] * (Izz - Iyy);
   transportThm[4] = -angular_vel[0] * angular_vel[2] * (Ixx - Izz);
@@ -197,13 +201,13 @@ void ThrusterController::ImuCB(const riptide_msgs::Imu::ConstPtr &imu_msg)
   
 
   Vector3d Fb_eig;
-  Fb_eig(0) = Fb * sin(theta);
-  Fb_eig(1) = -Fb * sin(phi) * cos(theta);
-  Fb_eig(2) = -Fb * cos(phi) * cos(theta);
+  Fb_eig(0) = Fb * sin(pitch);
+  Fb_eig(1) = -Fb * sin(roll) * cos(pitch);
+  Fb_eig(2) = -Fb * cos(roll) * cos(pitch);
 
-  weightLoad_eig(0) = -(Fg - Fb) * sin(theta);
-  weightLoad_eig(1) = (Fg - Fb) * sin(phi) * cos(theta);
-  weightLoad_eig(2) = (Fg - Fb) * cos(phi) * cos(theta);
+  weightLoad_eig(0) = -(Fg - Fb) * sin(pitch);
+  weightLoad_eig(1) = (Fg - Fb) * sin(roll) * cos(pitch);
+  weightLoad_eig(2) = (Fg - Fb) * cos(roll) * cos(pitch);
   weightLoad_eig.segment<3>(3) = CoB.cross(Fb_eig);
   weightLoad_eig = weightLoad_eig * ((int)(isSubmerged));
 

@@ -20,6 +20,7 @@ find_package(catkin REQUIRED
     sensor_msgs
     riptide_msgs
     tf
+    tf2_geometry_msgs
     control_toolbox
     actionlib_msgs
     darknet_ros_msgs

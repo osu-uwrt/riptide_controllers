@@ -27,15 +27,12 @@ int main(int argc, char **argv)
 DepthController::DepthController() : nh("~")
 {
   ros::NodeHandle dcpid("depth_controller");
-  R_b2w.setIdentity();
-  R_w2b.setIdentity();
-  tf.setValue(0, 0, 0);
 
   depth_controller_pid.init(dcpid, false);
 
   cmd_sub = nh.subscribe<riptide_msgs::DepthCommand>("/command/depth", 1, &DepthController::CommandCB, this);
   depth_sub = nh.subscribe<riptide_msgs::Depth>("/state/depth", 1, &DepthController::DepthCB, this);
-  imu_sub = nh.subscribe<riptide_msgs::Imu>("/state/imu", 1, &DepthController::ImuCB, this);
+  imu_sub = nh.subscribe<sensor_msgs::Imu>("/imu/data", 1, &DepthController::ImuCB, this);
 
   cmd_pub = nh.advertise<geometry_msgs::Vector3Stamped>("/command/force_depth", 1);
   status_pub = nh.advertise<riptide_msgs::ControlStatus>("/status/controls/depth", 1);
@@ -97,9 +94,9 @@ void DepthController::UpdateError()
     output = depth_controller_pid.computeCommand(depth_error, depth_error_dot, sample_duration);
 
     cmd_force.header.stamp = ros::Time::now();
-    cmd_force.vector.x = -output * sin(theta);
-    cmd_force.vector.y = output * sin(phi) * cos(theta);
-    cmd_force.vector.z = output * cos(phi) * cos(theta);
+    tf2::Vector3 force(0, 0, output);
+    force = tf2::quatRotate(quat.inverse(), force);
+    cmd_force.vector = tf2::toMsg(force);
     cmd_pub.publish(cmd_force);
 
     status_msg.header.stamp = ros::Time::now();
@@ -153,10 +150,9 @@ void DepthController::DepthCB(const riptide_msgs::Depth::ConstPtr &depth_msg)
 }
 
 // Create rotation matrix from IMU orientation
-void DepthController::ImuCB(const riptide_msgs::Imu::ConstPtr &imu_msg)
+void DepthController::ImuCB(const sensor_msgs::Imu::ConstPtr &imu_msg)
 {
-  phi = imu_msg->rpy_deg.x * PI / 180;
-  theta = imu_msg->rpy_deg.y * PI / 180;
+  tf2::fromMsg(imu_msg->orientation, quat);
   DepthController::UpdateError();
 }
 

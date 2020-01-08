@@ -2,10 +2,14 @@
 import rospy
 import actionlib
 
-from riptide_msgs.msg import AttitudeCommand, LinearCommand, Imu
+from riptide_msgs.msg import AttitudeCommand, LinearCommand
+from sensor_msgs.msg import Imu
 from nortek_dvl.msg import Dvl
 import riptide_controllers.msg
 import math
+import numpy as np
+
+from tf.transformations import euler_from_quaternion
 
 
 def angleDiff(a, b):
@@ -24,6 +28,11 @@ class Arc(object):
             "arc", riptide_controllers.msg.ArcAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
+    def imuToEuler(self, msg):
+        quat = msg.orientation
+        quat = [quat.x, quat.y, quat.z, quat.w]
+        return np.array(euler_from_quaternion(quat)) * 180 / math.pi
+
     def execute_cb(self, goal):
         rospy.loginfo("Driving in %fm arc"%goal.radius)
         self.lastVel = 0
@@ -31,12 +40,12 @@ class Arc(object):
         self.angleTraveled = 0
         self.radius = goal.radius
         self.linearVelocity = -math.pi * goal.velocity / 180 * goal.radius
-        self.startAngle = rospy.wait_for_message("/state/imu", Imu).rpy_deg.z
+        self.startAngle = self.imuToEuler(rospy.wait_for_message("/imu/data", Imu))[2]
 
         self.yawPub.publish(goal.velocity, AttitudeCommand.VELOCITY)
         self.YPub.publish(self.linearVelocity, LinearCommand.VELOCITY)
 
-        self.imuSub = rospy.Subscriber("/state/imu", Imu, self.imuCb)
+        self.imuSub = rospy.Subscriber("/imu/data", Imu, self.imuCb)
         self.dvlSub = rospy.Subscriber("/state/dvl", Dvl, self.dvlCb)
 
         while (self.angleTraveled < goal.angle and goal.velocity > 0) or (self.angleTraveled > goal.angle and goal.velocity < 0):
@@ -60,7 +69,8 @@ class Arc(object):
 
 
     def imuCb(self, msg):
-        self.angleTraveled = angleDiff(msg.rpy_deg.z, self.startAngle)
+        euler = self.imuToEuler(msg)
+        self.angleTraveled = angleDiff(euler[2], self.startAngle)
 
     def dvlCb(self, msg):
         if not math.isnan(msg.velocity.x):

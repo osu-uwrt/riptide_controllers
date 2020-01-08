@@ -3,10 +3,12 @@ import rospy
 import actionlib
 import dynamic_reconfigure.client
 
-from riptide_msgs.msg import AttitudeCommand, LinearCommand, Imu
+from riptide_msgs.msg import AttitudeCommand, LinearCommand
+from sensor_msgs.msg import Imu
 from std_msgs.msg import Float32, Float64, Int32
 import riptide_controllers.msg
 
+from tf.transformations import euler_from_quaternion
 import time
 import math
 import numpy as np
@@ -38,6 +40,11 @@ class GateManeuver(object):
             "gate_maneuver", riptide_controllers.msg.GateManeuverAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
+    def imuToEuler(self, msg):
+        quat = msg.orientation
+        quat = [quat.x, quat.y, quat.z, quat.w]
+        return np.array(euler_from_quaternion(quat)) * 180 / math.pi
+    
     def execute_cb(self, goal):
         rospy.loginfo("Starting gate maneuver")
         self.lastRoll = 0
@@ -47,7 +54,7 @@ class GateManeuver(object):
         self.XPub.publish(self.DRIVE_FORCE, LinearCommand.FORCE)
         self.rollPub.publish(self.CRUISE_VELOCITY, AttitudeCommand.VELOCITY)
 
-        self.imuSub = rospy.Subscriber("/state/imu", Imu, self.imuCb)
+        self.imuSub = rospy.Subscriber("/imu/data", Imu, self.imuCb)
 
         while self.rolls < 2:
             rospy.sleep(0.05)
@@ -62,7 +69,7 @@ class GateManeuver(object):
 
         self.cleanup()
 
-        while abs(rospy.wait_for_message("/state/imu", Imu).rpy_deg.x) > 5 and not rospy.is_shutdown():
+        while abs(self.imuToEuler(rospy.wait_for_message("/imu/data", Imu))[0]) > 5 and not rospy.is_shutdown():
             rospy.sleep(0.05)
 
         rospy.loginfo("Done")
@@ -75,12 +82,13 @@ class GateManeuver(object):
         self.XPub.publish(0, LinearCommand.FORCE)
 
     def imuCb(self, msg):
-        if self.lastRoll < -90 and msg.rpy_deg.x > -90 and not self.justRolled:
+        euler = self.imuToEuler(msg)
+        if self.lastRoll < -90 and euler[0] > -90 and not self.justRolled:
             self.rolls += 1
             self.justRolled = True
-        if msg.rpy_deg.x > 90:
+        if euler[0] > 90:
             self.justRolled = False
-        self.lastRoll = msg.rpy_deg.x
+        self.lastRoll = euler[0]
 
 
 if __name__ == '__main__':
