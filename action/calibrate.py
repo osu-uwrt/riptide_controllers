@@ -15,9 +15,9 @@ import yaml
 class CalibrateAction(object):
 
     def __init__(self):
-        self.depthPub = rospy.Publisher("/command/depth", DepthCommand, queue_size=1)
-        self.rollPub = rospy.Publisher("/command/roll", AttitudeCommand, queue_size=1)
-        self.pitchPub = rospy.Publisher("/command/pitch", AttitudeCommand, queue_size=1)
+        self.depthPub = rospy.Publisher("command/depth", DepthCommand, queue_size=1)
+        self.rollPub = rospy.Publisher("command/roll", AttitudeCommand, queue_size=1)
+        self.pitchPub = rospy.Publisher("command/pitch", AttitudeCommand, queue_size=1)
         
         self._as = actionlib.SimpleActionServer("calibrate", riptide_controllers.msg.CalibrateAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
@@ -59,7 +59,7 @@ class CalibrateAction(object):
             # Average 10 samples
             forceSum = 0
             for _ in range(1,10):
-                forceMsg = rospy.wait_for_message("/command/force_depth", Vector3Stamped).vector
+                forceMsg = rospy.wait_for_message("command/force_depth", Vector3Stamped).vector
                 force = math.sqrt(forceMsg.x**2 + forceMsg.y**2 + forceMsg.z**2)
 
                 if forceMsg.z < 0:
@@ -83,7 +83,7 @@ class CalibrateAction(object):
             CobYSum = 0
             CobXSum = 0
             for _ in range(1,10):
-                momentMsg = rospy.wait_for_message("/command/moment", Vector3Stamped).vector
+                momentMsg = rospy.wait_for_message("command/moment", Vector3Stamped).vector
                 CobYSum += momentMsg.x / Fb * 0.1
                 CobXSum += momentMsg.y / Fb * 0.1
 
@@ -109,7 +109,7 @@ class CalibrateAction(object):
 
             CobZSum = 0
             for _ in range(1,10):
-                momentMsg = rospy.wait_for_message("/command/moment", Vector3Stamped).vector
+                momentMsg = rospy.wait_for_message("command/moment", Vector3Stamped).vector
                 CobZSum += momentMsg.x / Fb / math.sqrt(2) * 0.1
 
             CobZ -= CobZSum * 0.8

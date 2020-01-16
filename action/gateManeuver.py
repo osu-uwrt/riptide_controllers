@@ -26,15 +26,15 @@ class GateManeuver(object):
 
     def __init__(self):
         self.rollPub = rospy.Publisher(
-            "/command/roll", AttitudeCommand, queue_size=5)
+            "command/roll", AttitudeCommand, queue_size=5)
         self.yawPub = rospy.Publisher(
-            "/command/yaw", AttitudeCommand, queue_size=5)
+            "command/yaw", AttitudeCommand, queue_size=5)
         self.XPub = rospy.Publisher(
-            "/command/x", LinearCommand, queue_size=5)
+            "command/x", LinearCommand, queue_size=5)
         self.YPub = rospy.Publisher(
-            "/command/y", LinearCommand, queue_size=5)
+            "command/y", LinearCommand, queue_size=5)
         self.ZPub = rospy.Publisher(
-            "/command/force_z", Float64, queue_size=5)
+            "command/force_z", Float64, queue_size=5)
 
         self._as = actionlib.SimpleActionServer(
             "gate_maneuver", riptide_controllers.msg.GateManeuverAction, execute_cb=self.execute_cb, auto_start=False)
@@ -54,7 +54,7 @@ class GateManeuver(object):
         self.XPub.publish(self.DRIVE_FORCE, LinearCommand.FORCE)
         self.rollPub.publish(self.CRUISE_VELOCITY, AttitudeCommand.VELOCITY)
 
-        self.imuSub = rospy.Subscriber("/imu/data", Imu, self.imuCb)
+        self.imuSub = rospy.Subscriber("imu/data", Imu, self.imuCb)
 
         while self.rolls < 2:
             rospy.sleep(0.05)
@@ -69,7 +69,7 @@ class GateManeuver(object):
 
         self.cleanup()
 
-        while abs(self.imuToEuler(rospy.wait_for_message("/imu/data", Imu))[0]) > 5 and not rospy.is_shutdown():
+        while abs(self.imuToEuler(rospy.wait_for_message("imu/data", Imu))[0]) > 5 and not rospy.is_shutdown():
             rospy.sleep(0.05)
 
         rospy.loginfo("Done")

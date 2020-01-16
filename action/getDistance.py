@@ -27,13 +27,13 @@ class GetDistance(object):
     def execute_cb(self, goal):
         rospy.loginfo("Finding distance to " + goal.object)
         self.image = None
-        sub = rospy.Subscriber("/stereo/disparity", DisparityImage, self.imgCB)
+        sub = rospy.Subscriber("stereo/disparity", DisparityImage, self.imgCB)
 
         readings = []
         while len(readings) < 5:
-            bboxes = rospy.wait_for_message("/state/bboxes", BoundingBoxes).bounding_boxes
+            bboxes = rospy.wait_for_message("state/bboxes", BoundingBoxes).bounding_boxes
             while len([x for x in bboxes if x.Class == goal.object]) == 0 or self.image is None:
-                bboxes = rospy.wait_for_message("/state/bboxes", BoundingBoxes).bounding_boxes
+                bboxes = rospy.wait_for_message("state/bboxes", BoundingBoxes).bounding_boxes
 
                 if self._as.is_preempt_requested():
                     rospy.loginfo('Preempted Get Distance')

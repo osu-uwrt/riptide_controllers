@@ -14,8 +14,8 @@ class MoveDistance(object):
     MAX_VELOCITY = 1
 
     def __init__(self):
-        self.xPub = rospy.Publisher("/command/x", LinearCommand, queue_size=1)
-        self.yPub = rospy.Publisher("/command/y", LinearCommand, queue_size=1)
+        self.xPub = rospy.Publisher("command/x", LinearCommand, queue_size=1)
+        self.yPub = rospy.Publisher("command/y", LinearCommand, queue_size=1)
         self._as = actionlib.SimpleActionServer("move_distance", riptide_controllers.msg.MoveDistanceAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
@@ -27,7 +27,7 @@ class MoveDistance(object):
         self.lastXVelocity = 0
         self.lastYVelocity = 0
         self.goal = goal
-        self.dvl_sub = rospy.Subscriber("/state/dvl", Dvl, self.dvlCb)
+        self.dvl_sub = rospy.Subscriber("state/dvl", Dvl, self.dvlCb)
 
         while abs(self.distanceX - goal.x) > 0.1 or abs(self.distanceY - goal.y) > 0.1:
             rospy.sleep(0.05)

@@ -60,7 +60,7 @@ rollController = RotationController()
 pitchController = RotationController()
 yawController = RotationController()
 
-momentPub = rospy.Publisher("/command/moment", Vector3Stamped, queue_size=5)
+momentPub = rospy.Publisher("command/moment", Vector3Stamped, queue_size=5)
 
 def imuCb(msg):
     quat = msg.orientation
@@ -100,10 +100,10 @@ if __name__ == '__main__':
     rospy.init_node("attitude_controller")
 
     # Set subscribers
-    rospy.Subscriber("/command/roll", AttitudeCommand, rollController.cmdCb)
-    rospy.Subscriber("/command/pitch", AttitudeCommand, pitchController.cmdCb)
-    rospy.Subscriber("/command/yaw", AttitudeCommand, yawController.cmdCb)
-    rospy.Subscriber("/imu/data", Imu, imuCb)
+    rospy.Subscriber("command/roll", AttitudeCommand, rollController.cmdCb)
+    rospy.Subscriber("command/pitch", AttitudeCommand, pitchController.cmdCb)
+    rospy.Subscriber("command/yaw", AttitudeCommand, yawController.cmdCb)
+    rospy.Subscriber("imu/data", Imu, imuCb)
     
     Server(AttitudeControllerConfig, dynamicReconfigureCb)
 

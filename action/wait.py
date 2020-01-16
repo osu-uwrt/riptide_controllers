@@ -23,7 +23,7 @@ class WaitAction(object):
         lastTime = time.time()
         while count < goal.times:
             try:
-                boxes = rospy.wait_for_message("/state/bboxes", BoundingBoxes, timeout=1.0)
+                boxes = rospy.wait_for_message("state/bboxes", BoundingBoxes, timeout=1.0)
                 for a in boxes.bounding_boxes:
                     if a.Class == goal.object:
                         if (time.time() - lastTime) < 0.3:

@@ -23,10 +23,10 @@ int main(int argc, char **argv)
 
 PWMController::PWMController() : nh("~")
 {
-  cmd_sub = nh.subscribe<riptide_msgs::ThrustStamped>("/command/thrust", 1, &PWMController::ThrustCB, this);
-  kill_sub = nh.subscribe<riptide_msgs::SwitchState>("/state/switches", 1, &PWMController::SwitchCB, this);
-  reset_sub = nh.subscribe<riptide_msgs::ResetControls>("/controls/reset", 1, &PWMController::ResetController, this);
-  pwm_pub = nh.advertise<riptide_msgs::PwmStamped>("/command/pwm", 1);
+  cmd_sub = nh.subscribe<riptide_msgs::ThrustStamped>("command/thrust", 1, &PWMController::ThrustCB, this);
+  kill_sub = nh.subscribe<riptide_msgs::SwitchState>("state/switches", 1, &PWMController::SwitchCB, this);
+  reset_sub = nh.subscribe<riptide_msgs::ResetControls>("controls/reset", 1, &PWMController::ResetController, this);
+  pwm_pub = nh.advertise<riptide_msgs::PwmStamped>("command/pwm", 1);
 
   PWMController::LoadParam<std::string>("properties_file", properties_file);
   properties = YAML::LoadFile(properties_file);

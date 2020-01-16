@@ -15,7 +15,7 @@ def angleDiff(a1, a2):
 class GoToPitchAction(object):
 
     def __init__(self):
-        self.pitchPub = rospy.Publisher("/command/pitch", AttitudeCommand, queue_size=1)
+        self.pitchPub = rospy.Publisher("command/pitch", AttitudeCommand, queue_size=1)
         self._as = actionlib.SimpleActionServer("go_to_pitch", riptide_controllers.msg.GoToPitchAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
@@ -28,7 +28,7 @@ class GoToPitchAction(object):
         rospy.loginfo("Going to Pitch " + str(goal.pitch)+ " deg")
         self.pitchPub.publish(goal.pitch, AttitudeCommand.POSITION)
 
-        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("/imu/data", Imu))[1], goal.pitch)) > 5:
+        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("imu/data", Imu))[1], goal.pitch)) > 5:
             rospy.sleep(0.05)
 
             if self._as.is_preempt_requested():

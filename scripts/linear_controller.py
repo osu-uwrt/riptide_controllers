@@ -44,8 +44,8 @@ class LinearController():
         
         
 
-XPub = rospy.Publisher("/command/force_x", Float64, queue_size=5)
-YPub = rospy.Publisher("/command/force_y", Float64, queue_size=5)
+XPub = rospy.Publisher("command/force_x", Float64, queue_size=5)
+YPub = rospy.Publisher("command/force_y", Float64, queue_size=5)
 
 xController = LinearController(XPub)
 yController = LinearController(YPub)
@@ -71,9 +71,9 @@ if __name__ == '__main__':
     rospy.init_node("linear_controller")
 
     # Set subscribers
-    rospy.Subscriber("/command/x", LinearCommand, xController.cmdCb)
-    rospy.Subscriber("/command/y", LinearCommand, yController.cmdCb)
-    rospy.Subscriber("/state/dvl", Dvl, dvlCb)
+    rospy.Subscriber("command/x", LinearCommand, xController.cmdCb)
+    rospy.Subscriber("command/y", LinearCommand, yController.cmdCb)
+    rospy.Subscriber("state/dvl", Dvl, dvlCb)
     
     Server(LinearControllerConfig, dynamicReconfigureCb)
 

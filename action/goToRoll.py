@@ -15,7 +15,7 @@ def angleDiff(a1, a2):
 class GoToRollAction(object):
 
     def __init__(self):
-        self.rollPub = rospy.Publisher("/command/roll", AttitudeCommand, queue_size=1)
+        self.rollPub = rospy.Publisher("command/roll", AttitudeCommand, queue_size=1)
         self._as = actionlib.SimpleActionServer("go_to_roll", riptide_controllers.msg.GoToRollAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
@@ -28,7 +28,7 @@ class GoToRollAction(object):
         rospy.loginfo("Going to Roll " + str(goal.roll)+ " deg")
         self.rollPub.publish(goal.roll, AttitudeCommand.POSITION)
 
-        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("/imu/data", Imu))[0], goal.roll)) > 5:
+        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("imu/data", Imu))[0], goal.roll)) > 5:
             rospy.sleep(0.05)
 
             if self._as.is_preempt_requested():

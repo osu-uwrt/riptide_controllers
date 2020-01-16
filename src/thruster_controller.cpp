@@ -33,11 +33,11 @@ ThrusterController::ThrusterController() : nh("~")
     Fb_vector[i] = 0;
   }
 
-  state_sub = nh.subscribe<sensor_msgs::Imu>("/imu/data", 1, &ThrusterController::ImuCB, this);
-  depth_sub = nh.subscribe<riptide_msgs::Depth>("/state/depth", 1, &ThrusterController::DepthCB, this);
-  cmd_sub = nh.subscribe<riptide_msgs::NetLoad>("/command/net_load", 1, &ThrusterController::NetLoadCB, this);
-  cob_pub = nh.advertise<geometry_msgs::Vector3Stamped>("/properties/cob", 1);
-  cmd_pub = nh.advertise<riptide_msgs::ThrustStamped>("/command/thrust", 1);
+  state_sub = nh.subscribe<sensor_msgs::Imu>("imu/data", 1, &ThrusterController::ImuCB, this);
+  depth_sub = nh.subscribe<riptide_msgs::Depth>("state/depth", 1, &ThrusterController::DepthCB, this);
+  cmd_sub = nh.subscribe<riptide_msgs::NetLoad>("command/net_load", 1, &ThrusterController::NetLoadCB, this);
+  cob_pub = nh.advertise<geometry_msgs::Vector3Stamped>("properties/cob", 1);
+  cmd_pub = nh.advertise<riptide_msgs::ThrustStamped>("command/thrust", 1);
 
   ThrusterController::InitDynamicReconfigure();
   ThrusterController::InitThrustMsg();

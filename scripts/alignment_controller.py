@@ -75,9 +75,9 @@ class AlignmentController():
         
 alignmentController = AlignmentController()
 
-XPub = rospy.Publisher("/command/x", LinearCommand, queue_size=5)
-YPub = rospy.Publisher("/command/y", LinearCommand, queue_size=5)
-depthPub = rospy.Publisher("/command/depth", DepthCommand, queue_size=5)
+XPub = rospy.Publisher("command/x", LinearCommand, queue_size=5)
+YPub = rospy.Publisher("command/y", LinearCommand, queue_size=5)
+depthPub = rospy.Publisher("command/depth", DepthCommand, queue_size=5)
 
 
    
@@ -91,10 +91,10 @@ if __name__ == '__main__':
     rospy.init_node("alignment_controller")
 
     # Set subscribers
-    rospy.Subscriber("/command/camera", Int8, alignmentController.cameraSelectionCb)
-    rospy.Subscriber("/command/alignment", AlignmentCommand, alignmentController.cmdCb)
-    rospy.Subscriber("/state/bboxes", BoundingBoxes, alignmentController.bboxCb)
-    rospy.Subscriber("/state/depth", Depth, alignmentController.depthCb)
+    rospy.Subscriber("command/camera", Int8, alignmentController.cameraSelectionCb)
+    rospy.Subscriber("command/alignment", AlignmentCommand, alignmentController.cmdCb)
+    rospy.Subscriber("state/bboxes", BoundingBoxes, alignmentController.bboxCb)
+    rospy.Subscriber("state/depth", Depth, alignmentController.depthCb)
     
     Server(AlignmentControllerConfig, dynamicReconfigureCb)
 

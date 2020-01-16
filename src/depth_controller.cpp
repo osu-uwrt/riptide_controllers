@@ -30,12 +30,12 @@ DepthController::DepthController() : nh("~")
 
   depth_controller_pid.init(dcpid, false);
 
-  cmd_sub = nh.subscribe<riptide_msgs::DepthCommand>("/command/depth", 1, &DepthController::CommandCB, this);
-  depth_sub = nh.subscribe<riptide_msgs::Depth>("/state/depth", 1, &DepthController::DepthCB, this);
-  imu_sub = nh.subscribe<sensor_msgs::Imu>("/imu/data", 1, &DepthController::ImuCB, this);
+  cmd_sub = nh.subscribe<riptide_msgs::DepthCommand>("command/depth", 1, &DepthController::CommandCB, this);
+  depth_sub = nh.subscribe<riptide_msgs::Depth>("state/depth", 1, &DepthController::DepthCB, this);
+  imu_sub = nh.subscribe<sensor_msgs::Imu>("imu/data", 1, &DepthController::ImuCB, this);
 
-  cmd_pub = nh.advertise<geometry_msgs::Vector3Stamped>("/command/force_depth", 1);
-  status_pub = nh.advertise<riptide_msgs::ControlStatus>("/status/controls/depth", 1);
+  cmd_pub = nh.advertise<geometry_msgs::Vector3Stamped>("command/force_depth", 1);
+  status_pub = nh.advertise<riptide_msgs::ControlStatus>("status/controls/depth", 1);
 
   DepthController::LoadParam<double>("max_depth", MAX_DEPTH);
   DepthController::LoadParam<double>("max_depth_error", MAX_DEPTH_ERROR);

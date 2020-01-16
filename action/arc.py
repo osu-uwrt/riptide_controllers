@@ -20,9 +20,9 @@ class Arc(object):
 
     def __init__(self):
         self.yawPub = rospy.Publisher(
-            "/command/yaw", AttitudeCommand, queue_size=5)
+            "command/yaw", AttitudeCommand, queue_size=5)
         self.YPub = rospy.Publisher(
-            "/command/y", LinearCommand, queue_size=5)
+            "command/y", LinearCommand, queue_size=5)
 
         self._as = actionlib.SimpleActionServer(
             "arc", riptide_controllers.msg.ArcAction, execute_cb=self.execute_cb, auto_start=False)
@@ -40,13 +40,13 @@ class Arc(object):
         self.angleTraveled = 0
         self.radius = goal.radius
         self.linearVelocity = -math.pi * goal.velocity / 180 * goal.radius
-        self.startAngle = self.imuToEuler(rospy.wait_for_message("/imu/data", Imu))[2]
+        self.startAngle = self.imuToEuler(rospy.wait_for_message("imu/data", Imu))[2]
 
         self.yawPub.publish(goal.velocity, AttitudeCommand.VELOCITY)
         self.YPub.publish(self.linearVelocity, LinearCommand.VELOCITY)
 
-        self.imuSub = rospy.Subscriber("/imu/data", Imu, self.imuCb)
-        self.dvlSub = rospy.Subscriber("/state/dvl", Dvl, self.dvlCb)
+        self.imuSub = rospy.Subscriber("imu/data", Imu, self.imuCb)
+        self.dvlSub = rospy.Subscriber("state/dvl", Dvl, self.dvlCb)
 
         while (self.angleTraveled < goal.angle and goal.velocity > 0) or (self.angleTraveled > goal.angle and goal.velocity < 0):
             rospy.sleep(0.1)

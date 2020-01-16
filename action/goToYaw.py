@@ -15,7 +15,7 @@ def angleDiff(a1, a2):
 class GoToYawAction(object):
 
     def __init__(self):
-        self.yawPub = rospy.Publisher("/command/yaw", AttitudeCommand, queue_size=1)
+        self.yawPub = rospy.Publisher("command/yaw", AttitudeCommand, queue_size=1)
         self._as = actionlib.SimpleActionServer("go_to_yaw", riptide_controllers.msg.GoToYawAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
@@ -28,7 +28,7 @@ class GoToYawAction(object):
         rospy.loginfo("Going to Yaw " + str(goal.yaw)+ " deg")
         self.yawPub.publish(goal.yaw, AttitudeCommand.POSITION)
 
-        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("/imu/data", Imu))[2], goal.yaw)) > 5:
+        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("imu/data", Imu))[2], goal.yaw)) > 5:
             rospy.sleep(0.05)
 
             if self._as.is_preempt_requested():

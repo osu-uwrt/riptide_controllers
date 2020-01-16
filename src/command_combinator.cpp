@@ -17,13 +17,13 @@ int main(int argc, char **argv)
 
 CommandCombinator::CommandCombinator() : nh("command_combinator")
 {
-  x_sub = nh.subscribe<std_msgs::Float64>("/command/force_x", 1, &CommandCombinator::XCB, this);
-  y_sub = nh.subscribe<std_msgs::Float64>("/command/force_y", 1, &CommandCombinator::YCB, this);
-  z_sub = nh.subscribe<std_msgs::Float64>("/command/force_z", 1, &CommandCombinator::ZCB, this);
-  depth_sub = nh.subscribe<geometry_msgs::Vector3Stamped>("/command/force_depth", 1, &CommandCombinator::DepthCB, this);
-  moment_sub = nh.subscribe<geometry_msgs::Vector3Stamped>("/command/moment", 1, &CommandCombinator::MomentCB, this);
+  x_sub = nh.subscribe<std_msgs::Float64>("command/force_x", 1, &CommandCombinator::XCB, this);
+  y_sub = nh.subscribe<std_msgs::Float64>("command/force_y", 1, &CommandCombinator::YCB, this);
+  z_sub = nh.subscribe<std_msgs::Float64>("command/force_z", 1, &CommandCombinator::ZCB, this);
+  depth_sub = nh.subscribe<geometry_msgs::Vector3Stamped>("command/force_depth", 1, &CommandCombinator::DepthCB, this);
+  moment_sub = nh.subscribe<geometry_msgs::Vector3Stamped>("command/moment", 1, &CommandCombinator::MomentCB, this);
 
-  cmd_pub = nh.advertise<riptide_msgs::NetLoad>("/command/net_load", 1); // The final net load
+  cmd_pub = nh.advertise<riptide_msgs::NetLoad>("command/net_load", 1); // The final net load
 
   CommandCombinator::LoadParam<double>("max_x_force", MAX_X_FORCE);
   CommandCombinator::LoadParam<double>("max_y_force", MAX_Y_FORCE);
