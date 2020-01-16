@@ -21,7 +21,7 @@ int main(int argc, char **argv)
   pwm_controller.Loop();
 }
 
-PWMController::PWMController() : nh("~")
+PWMController::PWMController() : nh()
 {
   cmd_sub = nh.subscribe<riptide_msgs::ThrustStamped>("command/thrust", 1, &PWMController::ThrustCB, this);
   kill_sub = nh.subscribe<riptide_msgs::SwitchState>("state/switches", 1, &PWMController::SwitchCB, this);

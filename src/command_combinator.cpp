@@ -15,7 +15,7 @@ int main(int argc, char **argv)
   }
 }
 
-CommandCombinator::CommandCombinator() : nh("command_combinator")
+CommandCombinator::CommandCombinator() : nh()
 {
   x_sub = nh.subscribe<std_msgs::Float64>("command/force_x", 1, &CommandCombinator::XCB, this);
   y_sub = nh.subscribe<std_msgs::Float64>("command/force_y", 1, &CommandCombinator::YCB, this);

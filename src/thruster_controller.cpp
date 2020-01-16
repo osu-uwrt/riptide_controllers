@@ -7,7 +7,7 @@ int main(int argc, char **argv)
   tc.Loop();
 }
 
-ThrusterController::ThrusterController() : nh("~")
+ThrusterController::ThrusterController() : nh()
 {
   // Load parameters from .yaml files or launch files
   //ThrusterController::LoadParam<bool>("tune", tune);

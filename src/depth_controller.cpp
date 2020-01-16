@@ -24,7 +24,7 @@ int main(int argc, char **argv)
   }
 }
 
-DepthController::DepthController() : nh("~")
+DepthController::DepthController() : nh()
 {
   ros::NodeHandle dcpid("depth_controller");
 
