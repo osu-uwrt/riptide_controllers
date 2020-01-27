@@ -15,8 +15,7 @@
 #include "geometry_msgs/Vector3.h"
 #include "geometry_msgs/Vector3Stamped.h"
 #include "geometry_msgs/Accel.h"
-#include "sensor_msgs/Imu.h"
-#include "riptide_msgs/Depth.h"
+#include "nav_msgs/Odometry.h"
 #include "riptide_msgs/ThrustStamped.h"
 #include "riptide_msgs/NetLoad.h"
 
@@ -37,8 +36,8 @@ typedef Matrix<double, Dynamic, Dynamic, RowMajor> RowMatrixXd;
 class ThrusterController
 {
 private:
-  ros::NodeHandle nh;
-  ros::Subscriber state_sub, cmd_sub, depth_sub;
+  ros::NodeHandle nh, private_nh;
+  ros::Subscriber odom_sub, cmd_sub;
   ros::Publisher cmd_pub, cob_pub;
 
   riptide_msgs::ThrustStamped thrust_msg;
@@ -50,8 +49,8 @@ private:
   DynamicReconfigServer::CallbackType param_reconfig_callback;
   boost::recursive_mutex param_reconfig_mutex;
 
-  YAML::Node properties;
-  string properties_file;
+  YAML::Node vehicle;
+  string vehicle_file;
   vector<int> thrustersEnabled;
   Vector3d CoB;
   double mass, Fg,  Fb, Ixx, Iyy, Izz, depth_fully_submerged;
@@ -87,8 +86,7 @@ public:
   void SetThrusterCoeffs();
   void InitThrustMsg();
   void DynamicReconfigCallback(riptide_controllers::VehiclePropertiesConfig &config, uint32_t levels);
-  void ImuCB(const sensor_msgs::Imu::ConstPtr &imu_msg);
-  void DepthCB(const riptide_msgs::Depth::ConstPtr &depth_msg);
+  void OdomCB(const nav_msgs::Odometry::ConstPtr &odom_msg);
   void NetLoadCB(const riptide_msgs::NetLoad::ConstPtr &load_msg);
   void Loop();
 };

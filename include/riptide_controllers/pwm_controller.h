@@ -11,7 +11,7 @@
 class PWMController
 {
  private:
-  ros::NodeHandle nh;
+  ros::NodeHandle nh, private_nh;
   ros::Subscriber cmd_sub, kill_sub, reset_sub;
   ros::Publisher pwm_pub;
   riptide_msgs::PwmStamped pwm_msg;

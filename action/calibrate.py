@@ -34,8 +34,8 @@ class CalibrateAction(object):
     def execute_cb(self, goal):
         client = dynamic_reconfigure.client.Client("thruster_controller", timeout=30)
 
-        with open(rospy.get_param('~properties_file'), 'r') as stream:
-            mass = yaml.safe_load(stream)['properties']['mass']
+        with open(rospy.get_param('vehicle_file'), 'r') as stream:
+            mass = yaml.safe_load(stream)['mass']
 
         rospy.loginfo("Starting calibration")
 
@@ -46,7 +46,7 @@ class CalibrateAction(object):
 
         client.update_configuration({"Buoyant_Force": Fb, "Buoyancy_X_POS": CobX, "Buoyancy_Y_POS": CobY, "Buoyancy_Z_POS": CobZ})
 
-        self.depthPub.publish(True, 1.5)
+        self.depthPub.publish(True, -1.5)
         self.rollPub.publish(0, AttitudeCommand.POSITION)
         self.pitchPub.publish(0, AttitudeCommand.POSITION)
 
@@ -67,7 +67,7 @@ class CalibrateAction(object):
                 forceSum += 0.1 * force
 
             # Adjust in the right direction
-            Fb += force * 0.8
+            Fb -= forceSum * 0.8
             client.update_configuration({"Buoyant_Force": Fb, "Buoyancy_X_POS": CobX, "Buoyancy_Y_POS": CobY, "Buoyancy_Z_POS": CobZ})
             if self._as.is_preempt_requested():
                 rospy.loginfo('Preempted Calibration')
@@ -87,8 +87,8 @@ class CalibrateAction(object):
                 CobYSum += momentMsg.x / Fb * 0.1
                 CobXSum += momentMsg.y / Fb * 0.1
 
-            CobY += CobYSum * 0.8
-            CobX -= CobXSum * 0.8
+            CobY -= CobYSum * 0.8
+            CobX += CobXSum * 0.8
 
             client.update_configuration({"Buoyant_Force": Fb, "Buoyancy_X_POS": CobX, "Buoyancy_Y_POS": CobY, "Buoyancy_Z_POS": CobZ})
 
@@ -112,7 +112,7 @@ class CalibrateAction(object):
                 momentMsg = rospy.wait_for_message("command/moment", Vector3Stamped).vector
                 CobZSum += momentMsg.x / Fb / math.sqrt(2) * 0.1
 
-            CobZ -= CobZSum * 0.8
+            CobZ += CobZSum * 0.8
 
             client.update_configuration({"Buoyant_Force": Fb, "Buoyancy_X_POS": CobX, "Buoyancy_Y_POS": CobY, "Buoyancy_Z_POS": CobZ})
 

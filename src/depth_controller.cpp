@@ -24,15 +24,14 @@ int main(int argc, char **argv)
   }
 }
 
-DepthController::DepthController() : nh()
+DepthController::DepthController() : nh(), private_nh("~")
 {
   ros::NodeHandle dcpid("depth_controller");
 
   depth_controller_pid.init(dcpid, false);
 
   cmd_sub = nh.subscribe<riptide_msgs::DepthCommand>("command/depth", 1, &DepthController::CommandCB, this);
-  depth_sub = nh.subscribe<riptide_msgs::Depth>("state/depth", 1, &DepthController::DepthCB, this);
-  imu_sub = nh.subscribe<sensor_msgs::Imu>("imu/data", 1, &DepthController::ImuCB, this);
+  depth_sub = nh.subscribe<nav_msgs::Odometry>("odometry/filtered", 1, &DepthController::OdomCB, this);
 
   cmd_pub = nh.advertise<geometry_msgs::Vector3Stamped>("command/force_depth", 1);
   status_pub = nh.advertise<riptide_msgs::ControlStatus>("status/controls/depth", 1);
@@ -62,7 +61,7 @@ void DepthController::LoadParam(string param, T &var)
 {
   try
   {
-    if (!nh.getParam(param, var))
+    if (!private_nh.getParam(param, var))
     {
       throw 0;
     }
@@ -131,7 +130,7 @@ void DepthController::CommandCB(const riptide_msgs::DepthCommand::ConstPtr &cmd)
     IS_DEPTH_RESET = false;
     depth_cmd = cmd->depth;
     depth_cmd = DepthController::Constrain(depth_cmd, MAX_DEPTH);
-    if (depth_cmd < 0) // Min. depth is zero
+    if (depth_cmd > 0) // Min. depth is zero
       depth_cmd = 0;
     status_msg.reference = depth_cmd;
   }
@@ -141,18 +140,12 @@ void DepthController::CommandCB(const riptide_msgs::DepthCommand::ConstPtr &cmd)
   }
 }
 
-// Subscribe to state/depth
-void DepthController::DepthCB(const riptide_msgs::Depth::ConstPtr &depth_msg)
+// Subscribe to odom
+void DepthController::OdomCB(const nav_msgs::Odometry::ConstPtr &odom_msg)
 {
-  current_depth = depth_msg->depth;
+  tf2::fromMsg(odom_msg->pose.pose.orientation, quat);
+  current_depth = odom_msg->pose.pose.position.z;
   status_msg.current = current_depth;
-  DepthController::UpdateError();
-}
-
-// Create rotation matrix from IMU orientation
-void DepthController::ImuCB(const sensor_msgs::Imu::ConstPtr &imu_msg)
-{
-  tf2::fromMsg(imu_msg->orientation, quat);
   DepthController::UpdateError();
 }
 

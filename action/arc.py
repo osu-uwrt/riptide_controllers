@@ -3,8 +3,7 @@ import rospy
 import actionlib
 
 from riptide_msgs.msg import AttitudeCommand, LinearCommand
-from sensor_msgs.msg import Imu
-from nortek_dvl.msg import Dvl
+from nav_msgs.msg import Odometry
 import riptide_controllers.msg
 import math
 import numpy as np
@@ -40,13 +39,12 @@ class Arc(object):
         self.angleTraveled = 0
         self.radius = goal.radius
         self.linearVelocity = -math.pi * goal.velocity / 180 * goal.radius
-        self.startAngle = self.imuToEuler(rospy.wait_for_message("imu/data", Imu))[2]
+        self.startAngle = self.imuToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[2]
 
         self.yawPub.publish(goal.velocity, AttitudeCommand.VELOCITY)
         self.YPub.publish(self.linearVelocity, LinearCommand.VELOCITY)
 
-        self.imuSub = rospy.Subscriber("imu/data", Imu, self.imuCb)
-        self.dvlSub = rospy.Subscriber("state/dvl", Dvl, self.dvlCb)
+        self.odomSub = rospy.Subscriber("odometry/filtered", Odometry, self.odomCb)
 
         while (self.angleTraveled < goal.angle and goal.velocity > 0) or (self.angleTraveled > goal.angle and goal.velocity < 0):
             rospy.sleep(0.1)
@@ -62,22 +60,17 @@ class Arc(object):
         self._as.set_succeeded()
 
     def cleanup(self):
-        self.imuSub.unregister()
+        self.odomSub.unregister()
         self.dvlSub.unregister()
         self.yawPub.publish(0, AttitudeCommand.VELOCITY)
         self.YPub.publish(0, LinearCommand.VELOCITY)
 
 
-    def imuCb(self, msg):
-        euler = self.imuToEuler(msg)
+    def odomCb(self, msg):
+        euler = self.imuToEuler(msg.pose.pose.orientation)
         self.angleTraveled = angleDiff(euler[2], self.startAngle)
-
-    def dvlCb(self, msg):
-        if not math.isnan(msg.velocity.x):
-            curVel = msg.velocity.y
-        else:
-            curVel = self.lastVel
-        self.linearPos += (self.lastVel + curVel) / 2 / 8 # / 8 because this message comes in at 8 Hz
+        curVel = msg.twist.twist.linear.y
+        self.linearPos += (self.lastVel + curVel) / 2 / 30 # / 30 because this message comes in at 8 Hz
         self.lastVel = curVel
         targetPos = -math.pi * self.angleTraveled / 180 * self.radius
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import rospy
-from riptide_msgs.msg import Depth, AttitudeCommand
-from sensor_msgs.msg import Imu
+from riptide_msgs.msg import AttitudeCommand
+from nav_msgs.msg import Odometry
 from std_msgs.msg import Float32, Header
 from geometry_msgs.msg import Vector3Stamped, Vector3
 from dynamic_reconfigure.server import Server
@@ -62,11 +62,12 @@ yawController = RotationController()
 
 momentPub = rospy.Publisher("command/moment", Vector3Stamped, queue_size=5)
 
-def imuCb(msg):
-    quat = msg.orientation
+def odomCb(msg):
+    quat = msg.pose.pose.orientation
     quat = [quat.x, quat.y, quat.z, quat.w]
     r, p, y = euler_from_quaternion(quat)
-    ang_vel = np.matrix([[msg.angular_velocity.x], [msg.angular_velocity.y], [msg.angular_velocity.z]])*R2D
+    ang_vel = msg.twist.twist.angular
+    ang_vel = np.matrix([[ang_vel.x], [ang_vel.y], [ang_vel.z]])*R2D
     conv_mat = np.matrix([[1, sin(r)*tan(p), cos(r)*tan(p)],
                           [0, cos(r)       , -sin(r)],
                           [0, sin(r)/cos(p), cos(r)/cos(p)]])
@@ -103,7 +104,7 @@ if __name__ == '__main__':
     rospy.Subscriber("command/roll", AttitudeCommand, rollController.cmdCb)
     rospy.Subscriber("command/pitch", AttitudeCommand, pitchController.cmdCb)
     rospy.Subscriber("command/yaw", AttitudeCommand, yawController.cmdCb)
-    rospy.Subscriber("imu/data", Imu, imuCb)
+    rospy.Subscriber("odometry/filtered", Odometry, odomCb)
     
     Server(AttitudeControllerConfig, dynamicReconfigureCb)
 

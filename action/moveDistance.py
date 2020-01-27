@@ -3,7 +3,7 @@ import rospy
 import actionlib
 
 from riptide_msgs.msg import LinearCommand
-from nortek_dvl.msg import Dvl
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Vector3
 import riptide_controllers.msg
 
@@ -27,7 +27,10 @@ class MoveDistance(object):
         self.lastXVelocity = 0
         self.lastYVelocity = 0
         self.goal = goal
-        self.dvl_sub = rospy.Subscriber("state/dvl", Dvl, self.dvlCb)
+        self.odom_sub = rospy.Subscriber("odometry/filtered", Odometry, self.odomCb)
+
+        self.startX = rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.position.x
+        self.startY = rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.position.x
 
         while abs(self.distanceX - goal.x) > 0.1 or abs(self.distanceY - goal.y) > 0.1:
             rospy.sleep(0.05)
@@ -52,17 +55,9 @@ class MoveDistance(object):
         self.yPub.publish(0, LinearCommand.FORCE)
 
 
-    def dvlCb(self, msg):
-        if not math.isnan(msg.velocity.x):
-            curXVel = msg.velocity.x
-            curYVel = msg.velocity.y
-        else:
-            curXVel = self.lastXVelocity
-            curYVel = self.lastYVelocity
-        self.distanceX += (self.lastXVelocity + curXVel) / 2.0 / 8
-        self.distanceY += (self.lastYVelocity + curYVel) / 2.0 / 8
-        self.lastXVelocity = curXVel
-        self.lastYVelocity = curYVel
+    def odomCb(self, msg):
+        self.distanceX = msg.pose.pose.position.x - self.startX
+        self.distanceY = msg.pose.pose.position.y - self.startY
 
         rospy.loginfo("X:%f Y:%f"%(self.distanceX, self.distanceY))
 

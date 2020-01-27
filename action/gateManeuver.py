@@ -4,7 +4,7 @@ import actionlib
 import dynamic_reconfigure.client
 
 from riptide_msgs.msg import AttitudeCommand, LinearCommand
-from sensor_msgs.msg import Imu
+from nav_msgs.msg import Odometry
 from std_msgs.msg import Float32, Float64, Int32
 import riptide_controllers.msg
 
@@ -54,7 +54,7 @@ class GateManeuver(object):
         self.XPub.publish(self.DRIVE_FORCE, LinearCommand.FORCE)
         self.rollPub.publish(self.CRUISE_VELOCITY, AttitudeCommand.VELOCITY)
 
-        self.imuSub = rospy.Subscriber("imu/data", Imu, self.imuCb)
+        self.odomSub = rospy.Subscriber("odometry/filtered", Odometry, self.odomCb)
 
         while self.rolls < 2:
             rospy.sleep(0.05)
@@ -69,7 +69,7 @@ class GateManeuver(object):
 
         self.cleanup()
 
-        while abs(self.imuToEuler(rospy.wait_for_message("imu/data", Imu))[0]) > 5 and not rospy.is_shutdown():
+        while abs(self.imuToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[0]) > 5 and not rospy.is_shutdown():
             rospy.sleep(0.05)
 
         rospy.loginfo("Done")
@@ -78,11 +78,11 @@ class GateManeuver(object):
 
     def cleanup(self):
         self.rollPub.publish(0, AttitudeCommand.POSITION)
-        self.imuSub.unregister()
+        self.odomSub.unregister()
         self.XPub.publish(0, LinearCommand.FORCE)
 
-    def imuCb(self, msg):
-        euler = self.imuToEuler(msg)
+    def odomCb(self, msg):
+        euler = self.imuToEuler(msg.pose.pose.orientation)
         if self.lastRoll < -90 and euler[0] > -90 and not self.justRolled:
             self.rolls += 1
             self.justRolled = True

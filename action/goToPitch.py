@@ -3,7 +3,7 @@ import rospy
 import actionlib
 
 from riptide_msgs.msg import AttitudeCommand
-from sensor_msgs.msg import Imu
+from nav_msgs.msg import Odometry
 import riptide_controllers.msg
 from tf.transformations import euler_from_quaternion
 import math
@@ -28,7 +28,7 @@ class GoToPitchAction(object):
         rospy.loginfo("Going to Pitch " + str(goal.pitch)+ " deg")
         self.pitchPub.publish(goal.pitch, AttitudeCommand.POSITION)
 
-        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("imu/data", Imu))[1], goal.pitch)) > 5:
+        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[1], goal.pitch)) > 5:
             rospy.sleep(0.05)
 
             if self._as.is_preempt_requested():

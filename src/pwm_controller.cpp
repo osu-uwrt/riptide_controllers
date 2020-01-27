@@ -21,7 +21,7 @@ int main(int argc, char **argv)
   pwm_controller.Loop();
 }
 
-PWMController::PWMController() : nh()
+PWMController::PWMController() : nh(), private_nh("~")
 {
   cmd_sub = nh.subscribe<riptide_msgs::ThrustStamped>("command/thrust", 1, &PWMController::ThrustCB, this);
   kill_sub = nh.subscribe<riptide_msgs::SwitchState>("state/switches", 1, &PWMController::SwitchCB, this);
@@ -45,7 +45,7 @@ void PWMController::LoadParam(std::string param, T &var)
 {
   try
   {
-    if (!nh.getParam(param, var))
+    if (!private_nh.getParam(param, var))
     {
       throw 0;
     }
