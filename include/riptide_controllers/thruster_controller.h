@@ -19,6 +19,8 @@
 #include "riptide_msgs/Depth.h"
 #include "riptide_msgs/ThrustStamped.h"
 #include "riptide_msgs/NetLoad.h"
+#include "riptide_msgs/ControllerEnable.h"
+
 
 #include <yaml-cpp/yaml.h>
 #include "eigen3/Eigen/Dense"
@@ -37,9 +39,10 @@ class ThrusterController
 {
 private:
   ros::NodeHandle nh;
-  ros::Subscriber state_sub, cmd_sub, depth_sub;
+  ros::Subscriber state_sub, cmd_sub, depth_sub, enable_sub;
   ros::Publisher cmd_pub, cob_pub;
 
+  int controller;
   riptide_msgs::ThrustStamped thrust_msg;
   geometry_msgs::Vector3Stamped cob_msg;
 
@@ -89,6 +92,7 @@ public:
   void ImuCB(const riptide_msgs::Imu::ConstPtr &imu_msg);
   void DepthCB(const riptide_msgs::Depth::ConstPtr &depth_msg);
   void NetLoadCB(const riptide_msgs::NetLoad::ConstPtr &load_msg);
+  void ControllerCB(const riptide_msgs::ControllerEnable::ConstPtr &controller_msg);
   void Loop();
 };
 
