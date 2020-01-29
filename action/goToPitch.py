@@ -19,8 +19,7 @@ class GoToPitchAction(object):
         self._as = actionlib.SimpleActionServer("go_to_pitch", riptide_controllers.msg.GoToPitchAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
-    def imuToEuler(self, msg):
-        quat = msg.orientation
+    def quatToEuler(self, quat):
         quat = [quat.x, quat.y, quat.z, quat.w]
         return np.array(euler_from_quaternion(quat)) * 180 / math.pi
       
@@ -28,7 +27,7 @@ class GoToPitchAction(object):
         rospy.loginfo("Going to Pitch " + str(goal.pitch)+ " deg")
         self.pitchPub.publish(goal.pitch, AttitudeCommand.POSITION)
 
-        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[1], goal.pitch)) > 5:
+        while abs(angleDiff(self.quatToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[1], goal.pitch)) > 5:
             rospy.sleep(0.05)
 
             if self._as.is_preempt_requested():

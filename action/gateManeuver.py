@@ -40,8 +40,7 @@ class GateManeuver(object):
             "gate_maneuver", riptide_controllers.msg.GateManeuverAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
-    def imuToEuler(self, msg):
-        quat = msg.orientation
+    def quatToEuler(self, quat):
         quat = [quat.x, quat.y, quat.z, quat.w]
         return np.array(euler_from_quaternion(quat)) * 180 / math.pi
     
@@ -69,7 +68,7 @@ class GateManeuver(object):
 
         self.cleanup()
 
-        while abs(self.imuToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[0]) > 5 and not rospy.is_shutdown():
+        while abs(self.quatToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[0]) > 5 and not rospy.is_shutdown():
             rospy.sleep(0.05)
 
         rospy.loginfo("Done")
@@ -82,7 +81,7 @@ class GateManeuver(object):
         self.XPub.publish(0, LinearCommand.FORCE)
 
     def odomCb(self, msg):
-        euler = self.imuToEuler(msg.pose.pose.orientation)
+        euler = self.quatToEuler(msg.pose.pose.orientation)
         if self.lastRoll < -90 and euler[0] > -90 and not self.justRolled:
             self.rolls += 1
             self.justRolled = True

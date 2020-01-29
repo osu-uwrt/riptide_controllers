@@ -19,8 +19,7 @@ class GoToRollAction(object):
         self._as = actionlib.SimpleActionServer("go_to_roll", riptide_controllers.msg.GoToRollAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
-    def imuToEuler(self, msg):
-        quat = msg.orientation
+    def quatToEuler(self, quat):
         quat = [quat.x, quat.y, quat.z, quat.w]
         return np.array(euler_from_quaternion(quat)) * 180 / math.pi
       
@@ -28,7 +27,7 @@ class GoToRollAction(object):
         rospy.loginfo("Going to Roll " + str(goal.roll)+ " deg")
         self.rollPub.publish(goal.roll, AttitudeCommand.POSITION)
 
-        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[0], goal.roll)) > 5:
+        while abs(angleDiff(self.quatToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[0], goal.roll)) > 5:
             rospy.sleep(0.05)
 
             if self._as.is_preempt_requested():

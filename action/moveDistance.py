@@ -26,11 +26,12 @@ class MoveDistance(object):
         self.distanceY = 0
         self.lastXVelocity = 0
         self.lastYVelocity = 0
+        self.lastTime = rospy.Time.now()
         self.goal = goal
         self.odom_sub = rospy.Subscriber("odometry/filtered", Odometry, self.odomCb)
 
-        self.startX = rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.position.x
-        self.startY = rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.position.x
+        self.startX = 0
+        self.startY = 0
 
         while abs(self.distanceX - goal.x) > 0.1 or abs(self.distanceY - goal.y) > 0.1:
             rospy.sleep(0.05)
@@ -42,22 +43,23 @@ class MoveDistance(object):
                 return
 
         rospy.loginfo("At desired position")
-        self.dvl_sub.unregister()
-        self.xPub.publish(0, LinearCommand.VELOCITY)
-        self.yPub.publish(0, LinearCommand.VELOCITY)
-        rospy.sleep(0.5)
         self.cleanup()
+        rospy.sleep(0.5)
         self._as.set_succeeded()
 
     def cleanup(self):
-        self.dvl_sub.unregister()
+        self.odom_sub.unregister()
         self.xPub.publish(0, LinearCommand.FORCE)
         self.yPub.publish(0, LinearCommand.FORCE)
 
 
     def odomCb(self, msg):
-        self.distanceX = msg.pose.pose.position.x - self.startX
-        self.distanceY = msg.pose.pose.position.y - self.startY
+        curXVel = msg.twist.twist.linear.x
+        curYVel = msg.twist.twist.linear.y
+        elapsedTime = (rospy.Time.now() - self.lastTime).to_sec()
+        self.distanceX += curXVel * elapsedTime
+        self.distanceY += curYVel * elapsedTime
+        self.lastTime = rospy.Time.now()
 
         rospy.loginfo("X:%f Y:%f"%(self.distanceX, self.distanceY))
 

@@ -19,8 +19,7 @@ class GoToYawAction(object):
         self._as = actionlib.SimpleActionServer("go_to_yaw", riptide_controllers.msg.GoToYawAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
-    def imuToEuler(self, msg):
-        quat = msg.orientation
+    def quatToEuler(self, quat):
         quat = [quat.x, quat.y, quat.z, quat.w]
         return np.array(euler_from_quaternion(quat)) * 180 / math.pi
       
@@ -28,7 +27,7 @@ class GoToYawAction(object):
         rospy.loginfo("Going to Yaw " + str(goal.yaw)+ " deg")
         self.yawPub.publish(goal.yaw, AttitudeCommand.POSITION)
 
-        while abs(angleDiff(self.imuToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[2], goal.yaw)) > 5:
+        while abs(angleDiff(self.quatToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[2], goal.yaw)) > 5:
             rospy.sleep(0.05)
 
             if self._as.is_preempt_requested():

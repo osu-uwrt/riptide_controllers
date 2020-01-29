@@ -27,8 +27,7 @@ class Arc(object):
             "arc", riptide_controllers.msg.ArcAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
-    def imuToEuler(self, msg):
-        quat = msg.orientation
+    def quatToEuler(self, quat):
         quat = [quat.x, quat.y, quat.z, quat.w]
         return np.array(euler_from_quaternion(quat)) * 180 / math.pi
 
@@ -39,7 +38,7 @@ class Arc(object):
         self.angleTraveled = 0
         self.radius = goal.radius
         self.linearVelocity = -math.pi * goal.velocity / 180 * goal.radius
-        self.startAngle = self.imuToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[2]
+        self.startAngle = self.quatToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[2]
 
         self.yawPub.publish(goal.velocity, AttitudeCommand.VELOCITY)
         self.YPub.publish(self.linearVelocity, LinearCommand.VELOCITY)
@@ -61,13 +60,12 @@ class Arc(object):
 
     def cleanup(self):
         self.odomSub.unregister()
-        self.dvlSub.unregister()
         self.yawPub.publish(0, AttitudeCommand.VELOCITY)
         self.YPub.publish(0, LinearCommand.VELOCITY)
 
 
     def odomCb(self, msg):
-        euler = self.imuToEuler(msg.pose.pose.orientation)
+        euler = self.quatToEuler(msg.pose.pose.orientation)
         self.angleTraveled = angleDiff(euler[2], self.startAngle)
         curVel = msg.twist.twist.linear.y
         self.linearPos += (self.lastVel + curVel) / 2 / 30 # / 30 because this message comes in at 8 Hz
