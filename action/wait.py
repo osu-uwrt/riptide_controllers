@@ -2,7 +2,7 @@
 import rospy
 import actionlib
 
-from riptide_msgs.msg import DepthCommand, AttitudeCommand, LinearCommand, Imu, Object, Depth
+from riptide_msgs.msg import DepthCommand, AttitudeCommand, LinearCommand, Object
 from std_msgs.msg import String, Int32, Float32, Float64
 from darknet_ros_msgs.msg import BoundingBoxes
 import riptide_controllers.msg
