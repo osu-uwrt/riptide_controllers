@@ -37,7 +37,8 @@ ThrusterController::ThrusterController() : nh(), private_nh("~")
   cmd_sub = nh.subscribe<riptide_msgs::NetLoad>("command/net_load", 1, &ThrusterController::NetLoadCB, this);
   // cob_pub = nh.advertise<geometry_msgs::Vector3Stamped>("vehicle/cob", 1);
   cmd_pub = nh.advertise<riptide_msgs::ThrustStamped>("command/thrust", 1);
-
+  enable_sub = nh.subscribe<riptide_msgs::ControllerEnable>("/command/controller_switch", 1, &ThrusterController::ControllerCB, this);
+  controller = 0;
   ThrusterController::InitDynamicReconfigure();
   ThrusterController::InitThrustMsg();
 
@@ -176,8 +177,10 @@ void ThrusterController::DynamicReconfigCallback(riptide_controllers::VehiclePro
   Fb = config.Buoyant_Force;
 }
 
-void ThrusterController::OdomCB(const nav_msgs::Odometry::ConstPtr &odom_msg)
-{
+void ThrusterController::ControllerCB(const riptide_msgs::ControllerEnable::ConstPtr &controller_msg){
+  controller = controller_msg->controller;
+}
+void ThrusterController::OdomCB(const nav_msgs::Odometry::ConstPtr &odom_msg){
   isSubmerged = (bool)(odom_msg->pose.pose.position.z < depth_fully_submerged);
 
   tf2::Quaternion quat;
@@ -238,7 +241,11 @@ void ThrusterController::NetLoadCB(const riptide_msgs::NetLoad::ConstPtr &load_m
   thrust_msg.force.heave_stbd_fwd = solver_forces[thrust_msg.force.HSF];
   thrust_msg.force.heave_port_aft = solver_forces[thrust_msg.force.HPA];
   thrust_msg.force.heave_stbd_aft = solver_forces[thrust_msg.force.HSA];
-  cmd_pub.publish(thrust_msg);
+  //disable if another controller is taking over
+  if(controller == 0){
+    cmd_pub.publish(thrust_msg);
+  }
+  
 
   // Tune Buoyancy - locate the center of buoyancy
   // The output will only make sense if the depth, roll, and pitch controllers
