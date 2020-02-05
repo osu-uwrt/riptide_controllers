@@ -17,7 +17,7 @@ class PWMController
   riptide_msgs::PwmStamped pwm_msg;
 
   YAML::Node properties;
-  std::string properties_file;
+  std::string vehicle_file;
   int thrusterType[8];
   float startup_config[2][4], primary_config[2][4]; // Slopes and y-intercepts
   float critical_thrusts[2][2]; // Minimum and startup thrusts
