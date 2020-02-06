@@ -39,6 +39,7 @@ class ThrusterController
 {
 private:
   ros::NodeHandle nh;
+  ros::NodeHandle private_nh;
   ros::Subscriber state_sub, cmd_sub, depth_sub, enable_sub, odom_sub;
   ros::Publisher cmd_pub, cob_pub;
 

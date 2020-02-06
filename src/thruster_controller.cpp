@@ -37,7 +37,7 @@ ThrusterController::ThrusterController() : nh(), private_nh("~")
   cmd_sub = nh.subscribe<riptide_msgs::NetLoad>("command/net_load", 1, &ThrusterController::NetLoadCB, this);
   // cob_pub = nh.advertise<geometry_msgs::Vector3Stamped>("vehicle/cob", 1);
   cmd_pub = nh.advertise<riptide_msgs::ThrustStamped>("command/thrust", 1);
-  enable_sub = nh.subscribe<riptide_msgs::ControllerEnable>("/command/controller_switch", 1, &ThrusterController::ControllerCB, this);
+  enable_sub = nh.subscribe<riptide_msgs::ControllerEnable>("command/controller_switch", 1, &ThrusterController::ControllerCB, this);
   controller = 0;
   ThrusterController::InitDynamicReconfigure();
   ThrusterController::InitThrustMsg();
