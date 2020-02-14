@@ -6,6 +6,7 @@ import dynamic_reconfigure.client
 from riptide_msgs.msg import DepthCommand, AttitudeCommand, Constants
 from geometry_msgs.msg import Vector3Stamped
 from std_msgs.msg import Float32
+from nav_msgs.msg import Odometry
 import riptide_controllers.msg
 
 import time
@@ -21,6 +22,7 @@ class CalibrateAction(object):
         self.depthPub = rospy.Publisher("command/depth", DepthCommand, queue_size=1)
         self.rollPub = rospy.Publisher("command/roll", AttitudeCommand, queue_size=1)
         self.pitchPub = rospy.Publisher("command/pitch", AttitudeCommand, queue_size=1)
+        self.yawPub = rospy.Publisher("command/yaw", AttitudeCommand, queue_size=1)
         
         self._as = actionlib.SimpleActionServer("calibrate", riptide_controllers.msg.CalibrateAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
@@ -55,12 +57,15 @@ class CalibrateAction(object):
         self.depthPub.publish(True, -1.5)
         self.rollPub.publish(0, AttitudeCommand.POSITION)
         self.pitchPub.publish(0, AttitudeCommand.POSITION)
-
-        rospy.sleep(3)
+        self.yawPub.publish(0, AttitudeCommand.POSITION)
 
         # Recalibrate 10 times
-        for _ in range(8):
-            rospy.sleep(3)
+        volumeAverage = 1
+        while abs(volumeAverage) > 0.00001:
+            rospy.sleep(1)
+            while abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.linear.z) > 0.01:
+                rospy.sleep(0.1)
+            rospy.loginfo("Adjusting")
 
             # Average 10 samples
             volumeAverage = 0
@@ -74,7 +79,7 @@ class CalibrateAction(object):
                 volumeAverage += volumeAdjust / 10
 
             # Adjust in the right direction
-            volume -= volumeAverage * 0.8
+            volume -= volumeAverage
             client.update_configuration({"Volume": volume, "Buoyancy_X_POS": cobX, "Buoyancy_Y_POS": cobY, "Buoyancy_Z_POS": cobZ})
             if self._as.is_preempt_requested():
                 rospy.loginfo('Preempted Calibration')
@@ -85,8 +90,14 @@ class CalibrateAction(object):
         Fb = volume * GRAVITY * WATER_DENSITY
         rospy.loginfo("Buoyant force calibration complete")
 
-        for _ in range(8):
-            rospy.sleep(3)
+        cobXAverage = 1
+        cobYAverage = 1
+        while abs(cobXAverage) > 0.0001 or abs(cobYAverage) > 0.0001:
+            rospy.sleep(1)
+            while abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.angular.x) > 0.005 \
+                or abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.angular.y) > 0.005:
+                rospy.sleep(0.1)
+            rospy.loginfo("Adjusting")
 
             cobYAverage = 0
             cobXAverage = 0
@@ -110,10 +121,12 @@ class CalibrateAction(object):
 
         self.rollPub.publish(45, AttitudeCommand.POSITION)
 
-        rospy.sleep(3)
-
-        for i in range(8):
-            rospy.sleep(3)
+        cobZAverage = 1
+        while abs(cobZAverage) > 0.0001:
+            rospy.sleep(1)
+            while abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.angular.x) > 0.005:
+                rospy.sleep(0.1)
+            rospy.loginfo("Adjusting")
 
             cobZAverage = 0
             for _ in range(10):
@@ -145,6 +158,7 @@ class CalibrateAction(object):
         self.depthPub.publish(False, 0)
         self.rollPub.publish(0, AttitudeCommand.MOMENT)
         self.pitchPub.publish(0, AttitudeCommand.MOMENT)
+        self.yawPub.publish(0, AttitudeCommand.MOMENT)
 
 
         
