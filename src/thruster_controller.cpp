@@ -107,6 +107,14 @@ void ThrusterController::InitDynamicReconfigure()
   // Now, we set the callback
   param_reconfig_callback = boost::bind(&ThrusterController::DynamicReconfigCallback, this, _1, _2);
   param_reconfig_server->setCallback(param_reconfig_callback);
+
+  // Set Defaults
+  riptide_controllers::VehiclePropertiesConfig config;
+  config.Volume = vehicle["volume"].as<double>();
+  config.Buoyancy_X_POS = vehicle["cob"][0].as<double>();
+  config.Buoyancy_Y_POS = vehicle["cob"][1].as<double>();
+  config.Buoyancy_Z_POS = vehicle["cob"][2].as<double>();
+  param_reconfig_server->updateConfig(config);
 }
 
 void ThrusterController::SetThrusterCoeffs()
@@ -171,10 +179,10 @@ void ThrusterController::InitThrustMsg()
 // Callback for dynamic reconfigure
 void ThrusterController::DynamicReconfigCallback(riptide_controllers::VehiclePropertiesConfig &config, uint32_t levels)
 {
-  CoB(0) = config.Buoyancy_X_POS;
-  CoB(1) = config.Buoyancy_Y_POS;
-  CoB(2) = config.Buoyancy_Z_POS;
-  Fb = config.Buoyant_Force;
+  CoB(0) = config.Buoyancy_X_POS - center_of_mass[0];
+  CoB(1) = config.Buoyancy_Y_POS - center_of_mass[1];
+  CoB(2) = config.Buoyancy_Z_POS - center_of_mass[2];
+  Fb = config.Volume * WATER_DENSITY * GRAVITY;
 }
 
 void ThrusterController::ControllerCB(const riptide_msgs::ControllerEnable::ConstPtr &controller_msg){

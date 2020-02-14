@@ -12,6 +12,9 @@ import time
 import math
 import yaml
 
+WATER_DENSITY = 1000
+GRAVITY = 9.81
+
 class CalibrateAction(object):
 
     def __init__(self):
@@ -35,16 +38,19 @@ class CalibrateAction(object):
         client = dynamic_reconfigure.client.Client("thruster_controller", timeout=30)
 
         with open(rospy.get_param('vehicle_file'), 'r') as stream:
-            mass = yaml.safe_load(stream)['mass']
+            vehicle = yaml.safe_load(stream)
+            mass = vehicle['mass']
+            com = vehicle['com']
+            
 
         rospy.loginfo("Starting calibration")
 
-        Fb = mass * 9.81
-        CobX = 0
-        CobY = 0
-        CobZ = 0
+        volume = mass / WATER_DENSITY
+        cobX = com[0]
+        cobY = com[1]
+        cobZ = com[2]
 
-        client.update_configuration({"Buoyant_Force": Fb, "Buoyancy_X_POS": CobX, "Buoyancy_Y_POS": CobY, "Buoyancy_Z_POS": CobZ})
+        client.update_configuration({"Volume": volume, "Buoyancy_X_POS": cobX, "Buoyancy_Y_POS": cobY, "Buoyancy_Z_POS": cobZ})
 
         self.depthPub.publish(True, -1.5)
         self.rollPub.publish(0, AttitudeCommand.POSITION)
@@ -53,44 +59,46 @@ class CalibrateAction(object):
         rospy.sleep(3)
 
         # Recalibrate 10 times
-        for _ in range(1, 10):
+        for _ in range(8):
             rospy.sleep(3)
 
             # Average 10 samples
-            forceSum = 0
-            for _ in range(1,10):
+            volumeAverage = 0
+            for _ in range(10):
                 forceMsg = rospy.wait_for_message("command/force_depth", Vector3Stamped).vector
                 force = math.sqrt(forceMsg.x**2 + forceMsg.y**2 + forceMsg.z**2)
-
                 if forceMsg.z < 0:
                     force *= -1
-                forceSum += 0.1 * force
+
+                volumeAdjust = force / GRAVITY / WATER_DENSITY
+                volumeAverage += volumeAdjust / 10
 
             # Adjust in the right direction
-            Fb -= forceSum * 0.8
-            client.update_configuration({"Buoyant_Force": Fb, "Buoyancy_X_POS": CobX, "Buoyancy_Y_POS": CobY, "Buoyancy_Z_POS": CobZ})
+            volume -= volumeAverage * 0.8
+            client.update_configuration({"Volume": volume, "Buoyancy_X_POS": cobX, "Buoyancy_Y_POS": cobY, "Buoyancy_Z_POS": cobZ})
             if self._as.is_preempt_requested():
                 rospy.loginfo('Preempted Calibration')
                 self.cleanup()
                 self._as.set_preempted()
                 return
 
+        Fb = volume * GRAVITY * WATER_DENSITY
         rospy.loginfo("Buoyant force calibration complete")
 
-        for _ in range(1, 10):
+        for _ in range(8):
             rospy.sleep(3)
 
-            CobYSum = 0
-            CobXSum = 0
-            for _ in range(1,10):
+            cobYAverage = 0
+            cobXAverage = 0
+            for _ in range(10):
                 momentMsg = rospy.wait_for_message("command/moment", Vector3Stamped).vector
-                CobYSum += momentMsg.x / Fb * 0.1
-                CobXSum += momentMsg.y / Fb * 0.1
+                cobYAverage += momentMsg.x / Fb * 0.1
+                cobXAverage += momentMsg.y / Fb * 0.1
 
-            CobY -= CobYSum * 0.8
-            CobX += CobXSum * 0.8
+            cobY -= cobYAverage
+            cobX += cobXAverage
 
-            client.update_configuration({"Buoyant_Force": Fb, "Buoyancy_X_POS": CobX, "Buoyancy_Y_POS": CobY, "Buoyancy_Z_POS": CobZ})
+            client.update_configuration({"Volume": volume, "Buoyancy_X_POS": cobX, "Buoyancy_Y_POS": cobY, "Buoyancy_Z_POS": cobZ})
 
             if self._as.is_preempt_requested():
                 rospy.loginfo('Preempted Calibration')
@@ -104,17 +112,17 @@ class CalibrateAction(object):
 
         rospy.sleep(3)
 
-        for i in range(1, 10):
+        for i in range(8):
             rospy.sleep(3)
 
-            CobZSum = 0
-            for _ in range(1,10):
+            cobZAverage = 0
+            for _ in range(10):
                 momentMsg = rospy.wait_for_message("command/moment", Vector3Stamped).vector
-                CobZSum += momentMsg.x / Fb / math.sqrt(2) * 0.1
+                cobZAverage += momentMsg.x / Fb * 0.1
 
-            CobZ += CobZSum * 0.8
+            cobZ += cobZAverage
 
-            client.update_configuration({"Buoyant_Force": Fb, "Buoyancy_X_POS": CobX, "Buoyancy_Y_POS": CobY, "Buoyancy_Z_POS": CobZ})
+            client.update_configuration({"Volume": volume, "Buoyancy_X_POS": cobX, "Buoyancy_Y_POS": cobY, "Buoyancy_Z_POS": cobZ})
 
             if self._as.is_preempt_requested():
                 rospy.loginfo('Preempted Calibration')
