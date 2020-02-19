@@ -36,7 +36,7 @@ class ThrusterTest(object):
             
         
             #should never reach this point in the code
-        rospy.loginfo("ThrustTest succeed")
+        rospy.loginfo("ThrustTest succeeded")
         self._as.set_succeeded()
 
 if __name__ == '__main__':

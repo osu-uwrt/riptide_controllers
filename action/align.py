@@ -51,7 +51,7 @@ class AlignAction(object):
         if not goal.hold:
             self.alignPub.publish("", 0)  
     
-        rospy.loginfo("Alignment succeed")
+        rospy.loginfo("Alignment succeeded")
         self._as.set_succeeded()
 
 if __name__ == '__main__':
