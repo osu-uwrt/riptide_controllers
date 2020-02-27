@@ -115,6 +115,7 @@ void ThrusterController::InitDynamicReconfigure()
   config.Buoyancy_Y_POS = vehicle["cob"][1].as<double>();
   config.Buoyancy_Z_POS = vehicle["cob"][2].as<double>();
   param_reconfig_server->updateConfig(config);
+  ThrusterController::DynamicReconfigCallback(config, 1);
 }
 
 void ThrusterController::SetThrusterCoeffs()
