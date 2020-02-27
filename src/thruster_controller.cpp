@@ -85,7 +85,7 @@ void ThrusterController::LoadVehicleProperties()
   Fg = mass * GRAVITY;
 
   // TODO: Use TF to detect when thrusters not submerged
-  depth_fully_submerged = 0.3;
+  depth_fully_submerged = -0.3;
 
   Ixx = vehicle["inertia"][0].as<double>();
   Iyy = vehicle["inertia"][1].as<double>();
