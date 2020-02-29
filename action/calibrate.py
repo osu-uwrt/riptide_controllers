@@ -61,9 +61,9 @@ class CalibrateAction(object):
 
         # Recalibrate 10 times
         volumeAverage = 1
-        while abs(volumeAverage) > 0.00001:
+        while abs(volumeAverage) > 0.00004:
             rospy.sleep(1)
-            while abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.linear.z) > 0.03:
+            while abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.linear.z) > 0.1:
                 rospy.sleep(0.1)
             rospy.loginfo("Adjusting")
 
@@ -92,10 +92,10 @@ class CalibrateAction(object):
 
         cobXAverage = 1
         cobYAverage = 1
-        while abs(cobXAverage) > 0.0005 or abs(cobYAverage) > 0.0005:
+        while abs(cobXAverage) > 0.001 or abs(cobYAverage) > 0.001:
             rospy.sleep(1)
-            while abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.angular.x) > 0.02 \
-                or abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.angular.y) > 0.02:
+            while abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.angular.x) > 0.04 \
+                or abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.angular.y) > 0.04:
                 rospy.sleep(0.1)
             rospy.loginfo("Adjusting")
 
@@ -122,9 +122,9 @@ class CalibrateAction(object):
         self.rollPub.publish(45, AttitudeCommand.POSITION)
 
         cobZAverage = 1
-        while abs(cobZAverage) > 0.0003:
+        while abs(cobZAverage) > 0.0005:
             rospy.sleep(1)
-            while abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.angular.x) > 0.02:
+            while abs(rospy.wait_for_message("odometry/filtered", Odometry).twist.twist.angular.x) > 0.04:
                 rospy.sleep(0.1)
             rospy.loginfo("Adjusting")
 

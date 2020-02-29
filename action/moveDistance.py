@@ -4,7 +4,7 @@ import actionlib
 
 from riptide_msgs.msg import LinearCommand
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Vector3
+from geometry_msgs.msg import Vector3, TwistWithCovarianceStamped
 import riptide_controllers.msg
 
 import math
@@ -28,7 +28,7 @@ class MoveDistance(object):
         self.lastYVelocity = 0
         self.lastTime = rospy.Time.now()
         self.goal = goal
-        self.odom_sub = rospy.Subscriber("odometry/filtered", Odometry, self.odomCb)
+        self.odom_sub = rospy.Subscriber("dvl/twist", Twist, self.odomCb)
 
         self.startX = 0
         self.startY = 0
@@ -54,12 +54,12 @@ class MoveDistance(object):
 
 
     def odomCb(self, msg):
-        curXVel = msg.twist.twist.linear.x
-        curYVel = msg.twist.twist.linear.y
-        elapsedTime = (rospy.Time.now() - self.lastTime).to_sec()
-        self.distanceX += curXVel * elapsedTime
-        self.distanceY += curYVel * elapsedTime
-        self.lastTime = rospy.Time.now()
+        curXVel = msg.twist.linear.x
+        curYVel = msg.twist.linear.y
+        self.distanceX += (self.lastXVelocity + curXVel) / 2.0 / 30
+        self.distanceY += (self.lastYVelocity + curYVel) / 2.0 / 30
+        self.lastXVelocity = curXVel
+        self.lastYVelocity = curYVel
 
         rospy.loginfo("X:%f Y:%f"%(self.distanceX, self.distanceY))
 
