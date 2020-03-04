@@ -37,6 +37,7 @@ class CalibrateAction(object):
     def execute_cb(self, goal):
         client = dynamic_reconfigure.client.Client("thruster_controller", timeout=30)
 
+        # Get the mass and COM
         with open(rospy.get_param('vehicle_file'), 'r') as stream:
             vehicle = yaml.safe_load(stream)
             mass = vehicle['mass']
@@ -45,6 +46,7 @@ class CalibrateAction(object):
 
         rospy.loginfo("Starting calibration")
 
+        # Reset parameters to default
         volume = mass / WATER_DENSITY
         cobX = com[0]
         cobY = com[1]
@@ -58,8 +60,10 @@ class CalibrateAction(object):
 
         rospy.sleep(3)
 
-        # Recalibrate 10 times
-        for _ in range(8):
+        # Recalibrate until it converges
+        lastAdjustment = 0
+        converged = False
+        while not converged:
             rospy.sleep(3)
 
             # Average 10 samples
@@ -74,8 +78,14 @@ class CalibrateAction(object):
                 volumeAverage += volumeAdjust / 10
 
             # Adjust in the right direction
-            volume -= volumeAverage * 0.8
+            volume -= volumeAverage * .9
             client.update_configuration({"Volume": volume, "Buoyancy_X_POS": cobX, "Buoyancy_Y_POS": cobY, "Buoyancy_Z_POS": cobZ})
+            
+            # If the direction of adjustment changed, stop
+            if lastAdjustment * volumeAverage < 0:
+                converged = True
+            lastAdjustment = volumeAverage
+
             if self._as.is_preempt_requested():
                 rospy.loginfo('Preempted Calibration')
                 self.cleanup()
@@ -85,20 +95,33 @@ class CalibrateAction(object):
         Fb = volume * GRAVITY * WATER_DENSITY
         rospy.loginfo("Buoyant force calibration complete")
 
-        for _ in range(8):
+        lastAdjustmentX = 0
+        convergedX = False
+        lastAdjustmentY = 0
+        convergedY = False
+        while not convergedX or not convergedY:
             rospy.sleep(3)
 
             cobYAverage = 0
             cobXAverage = 0
             for _ in range(10):
                 momentMsg = rospy.wait_for_message("command/moment", Vector3Stamped).vector
-                cobYAverage += momentMsg.x / Fb * 0.1
-                cobXAverage += momentMsg.y / Fb * 0.1
+                cobYAverage += momentMsg.x / Fb * 2**.5 * 0.1
+                cobXAverage += momentMsg.y / Fb * 2**.5 * 0.1
 
+            rospy.loginfo(cobYAverage)
             cobY -= cobYAverage
             cobX += cobXAverage
 
             client.update_configuration({"Volume": volume, "Buoyancy_X_POS": cobX, "Buoyancy_Y_POS": cobY, "Buoyancy_Z_POS": cobZ})
+
+            # If the direction of adjustment changed, stop
+            if lastAdjustmentX * cobXAverage < 0:
+                convergedX = True
+            if lastAdjustmentY * cobYAverage < 0:
+                convergedY = True
+            lastAdjustmentX = cobXAverage
+            lastAdjustmentY = cobYAverage
 
             if self._as.is_preempt_requested():
                 rospy.loginfo('Preempted Calibration')
@@ -112,17 +135,24 @@ class CalibrateAction(object):
 
         rospy.sleep(3)
 
-        for i in range(8):
+        lastAdjustment = 0
+        converged = False
+        while not converged:
             rospy.sleep(3)
 
             cobZAverage = 0
             for _ in range(10):
                 momentMsg = rospy.wait_for_message("command/moment", Vector3Stamped).vector
-                cobZAverage += momentMsg.x / Fb * 0.1
+                cobZAverage += momentMsg.x / Fb * 2**.5 * 0.1
 
             cobZ += cobZAverage
 
             client.update_configuration({"Volume": volume, "Buoyancy_X_POS": cobX, "Buoyancy_Y_POS": cobY, "Buoyancy_Z_POS": cobZ})
+
+            # If the direction of adjustment changed, stop
+            if lastAdjustment * cobZAverage < 0:
+                converged = True
+            lastAdjustment = cobZAverage
 
             if self._as.is_preempt_requested():
                 rospy.loginfo('Preempted Calibration')
