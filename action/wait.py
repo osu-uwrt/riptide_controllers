@@ -2,7 +2,7 @@
 import rospy
 import actionlib
 
-from riptide_msgs.msg import DepthCommand, AttitudeCommand, LinearCommand, Imu, Object, Depth
+from riptide_msgs.msg import DepthCommand, AttitudeCommand, LinearCommand, Object
 from std_msgs.msg import String, Int32, Float32, Float64
 from darknet_ros_msgs.msg import BoundingBoxes
 import riptide_controllers.msg
@@ -23,7 +23,7 @@ class WaitAction(object):
         lastTime = time.time()
         while count < goal.times:
             try:
-                boxes = rospy.wait_for_message("/state/bboxes", BoundingBoxes, timeout=1.0)
+                boxes = rospy.wait_for_message("state/bboxes", BoundingBoxes, timeout=1.0)
                 for a in boxes.bounding_boxes:
                     if a.Class == goal.object:
                         if (time.time() - lastTime) < 0.3:

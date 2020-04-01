@@ -20,6 +20,7 @@ find_package(catkin REQUIRED
     sensor_msgs
     riptide_msgs
     tf
+    tf2_geometry_msgs
     control_toolbox
     actionlib_msgs
     darknet_ros_msgs
@@ -76,11 +77,11 @@ include_directories(include ${catkin_INCLUDE_DIRS}
 
 cmake_host_system_information(RESULT _host_name QUERY HOSTNAME)
 
-#if(NOT _host_name MATCHES "riptide")
+if(NOT _host_name MATCHES "jetson")
     add_executable(thruster_controller src/thruster_controller.cpp)
     target_link_libraries(thruster_controller ${catkin_LIBRARIES} ${CERES_LIBRARIES} yaml-cpp)
     add_dependencies(thruster_controller ${catkin_EXPORTED_TARGETS})
-#endif()
+endif()
 #add_dependencies(thruster_controller riptide_controllers_gencfg)
 
 add_executable(depth_controller src/depth_controller.cpp)

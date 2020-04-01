@@ -29,8 +29,8 @@ class GetDistance(object):
     def execute_cb(self, goal):
         rospy.loginfo("Finding distance to " + goal.object)
         self.goal = goal
-        stereoSub = message_filters.Subscriber("/stereo/disparity", DisparityImage)
-        bboxSub = message_filters.Subscriber("/state/bboxes", BoundingBoxes)
+        stereoSub = message_filters.Subscriber("stereo/disparity", DisparityImage)
+        bboxSub = message_filters.Subscriber("state/bboxes", BoundingBoxes)
         ts = message_filters.TimeSynchronizer([stereoSub, bboxSub], 20)
         ts.registerCallback(self.imgCB)
 

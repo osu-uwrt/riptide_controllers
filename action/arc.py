@@ -2,10 +2,13 @@
 import rospy
 import actionlib
 
-from riptide_msgs.msg import AttitudeCommand, LinearCommand, Imu
-from nortek_dvl.msg import Dvl
+from riptide_msgs.msg import AttitudeCommand, LinearCommand
+from nav_msgs.msg import Odometry
 import riptide_controllers.msg
 import math
+import numpy as np
+
+from tf.transformations import euler_from_quaternion
 
 
 def angleDiff(a, b):
@@ -16,13 +19,17 @@ class Arc(object):
 
     def __init__(self):
         self.yawPub = rospy.Publisher(
-            "/command/yaw", AttitudeCommand, queue_size=5)
+            "command/yaw", AttitudeCommand, queue_size=5)
         self.YPub = rospy.Publisher(
-            "/command/y", LinearCommand, queue_size=5)
+            "command/y", LinearCommand, queue_size=5)
 
         self._as = actionlib.SimpleActionServer(
             "arc", riptide_controllers.msg.ArcAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
+
+    def quatToEuler(self, quat):
+        quat = [quat.x, quat.y, quat.z, quat.w]
+        return np.array(euler_from_quaternion(quat)) * 180 / math.pi
 
     def execute_cb(self, goal):
         rospy.loginfo("Driving in %fm arc"%goal.radius)
@@ -31,13 +38,12 @@ class Arc(object):
         self.angleTraveled = 0
         self.radius = goal.radius
         self.linearVelocity = -math.pi * goal.velocity / 180 * goal.radius
-        self.startAngle = rospy.wait_for_message("/state/imu", Imu).rpy_deg.z
+        self.startAngle = self.quatToEuler(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)[2]
 
         self.yawPub.publish(goal.velocity, AttitudeCommand.VELOCITY)
         self.YPub.publish(self.linearVelocity, LinearCommand.VELOCITY)
 
-        self.imuSub = rospy.Subscriber("/state/imu", Imu, self.imuCb)
-        self.dvlSub = rospy.Subscriber("/state/dvl", Dvl, self.dvlCb)
+        self.odomSub = rospy.Subscriber("odometry/filtered", Odometry, self.odomCb)
 
         while (self.angleTraveled < goal.angle and goal.velocity > 0) or (self.angleTraveled > goal.angle and goal.velocity < 0):
             rospy.sleep(0.1)
@@ -53,21 +59,16 @@ class Arc(object):
         self._as.set_succeeded()
 
     def cleanup(self):
-        self.imuSub.unregister()
-        self.dvlSub.unregister()
+        self.odomSub.unregister()
         self.yawPub.publish(0, AttitudeCommand.VELOCITY)
         self.YPub.publish(0, LinearCommand.VELOCITY)
 
 
-    def imuCb(self, msg):
-        self.angleTraveled = angleDiff(msg.rpy_deg.z, self.startAngle)
-
-    def dvlCb(self, msg):
-        if not math.isnan(msg.velocity.x):
-            curVel = msg.velocity.y
-        else:
-            curVel = self.lastVel
-        self.linearPos += (self.lastVel + curVel) / 2 / 8 # / 8 because this message comes in at 8 Hz
+    def odomCb(self, msg):
+        euler = self.quatToEuler(msg.pose.pose.orientation)
+        self.angleTraveled = angleDiff(euler[2], self.startAngle)
+        curVel = msg.twist.twist.linear.y
+        self.linearPos += (self.lastVel + curVel) / 2 / 30 # / 30 because this message comes in at 8 Hz
         self.lastVel = curVel
         targetPos = -math.pi * self.angleTraveled / 180 * self.radius
 

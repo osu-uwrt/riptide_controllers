@@ -12,7 +12,7 @@ import riptide_controllers.msg
 class ThrusterTest(object):
 
     def __init__(self):
-        self.thrustPub = rospy.Publisher("/command/thrust", ThrustStamped, queue_size=1)
+        self.thrustPub = rospy.Publisher("command/thrust", ThrustStamped, queue_size=1)
         self._as = actionlib.SimpleActionServer("thruster_test", riptide_controllers.msg.ThrusterTestAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
@@ -36,7 +36,7 @@ class ThrusterTest(object):
             
         
             #should never reach this point in the code
-        rospy.loginfo("ThrustTest succeed")
+        rospy.loginfo("ThrustTest succeeded")
         self._as.set_succeeded()
 
 if __name__ == '__main__':

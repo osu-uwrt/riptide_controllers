@@ -3,8 +3,8 @@ import rospy
 import actionlib
 
 from riptide_msgs.msg import LinearCommand
-from nortek_dvl.msg import Dvl
-from geometry_msgs.msg import Vector3
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Vector3, TwistWithCovarianceStamped
 import riptide_controllers.msg
 
 import math
@@ -14,8 +14,8 @@ class MoveDistance(object):
     MAX_VELOCITY = 1
 
     def __init__(self):
-        self.xPub = rospy.Publisher("/command/x", LinearCommand, queue_size=1)
-        self.yPub = rospy.Publisher("/command/y", LinearCommand, queue_size=1)
+        self.xPub = rospy.Publisher("command/x", LinearCommand, queue_size=1)
+        self.yPub = rospy.Publisher("command/y", LinearCommand, queue_size=1)
         self._as = actionlib.SimpleActionServer("move_distance", riptide_controllers.msg.MoveDistanceAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
@@ -26,8 +26,12 @@ class MoveDistance(object):
         self.distanceY = 0
         self.lastXVelocity = 0
         self.lastYVelocity = 0
+        self.lastTime = rospy.Time.now()
         self.goal = goal
-        self.dvl_sub = rospy.Subscriber("/state/dvl", Dvl, self.dvlCb)
+        self.odom_sub = rospy.Subscriber("dvl/twist", Twist, self.odomCb)
+
+        self.startX = 0
+        self.startY = 0
 
         while abs(self.distanceX - goal.x) > 0.1 or abs(self.distanceY - goal.y) > 0.1:
             rospy.sleep(0.05)
@@ -39,28 +43,21 @@ class MoveDistance(object):
                 return
 
         rospy.loginfo("At desired position")
-        self.dvl_sub.unregister()
-        self.xPub.publish(0, LinearCommand.VELOCITY)
-        self.yPub.publish(0, LinearCommand.VELOCITY)
-        rospy.sleep(0.5)
         self.cleanup()
+        rospy.sleep(0.5)
         self._as.set_succeeded()
 
     def cleanup(self):
-        self.dvl_sub.unregister()
+        self.odom_sub.unregister()
         self.xPub.publish(0, LinearCommand.FORCE)
         self.yPub.publish(0, LinearCommand.FORCE)
 
 
-    def dvlCb(self, msg):
-        if not math.isnan(msg.velocity.x):
-            curXVel = msg.velocity.x
-            curYVel = msg.velocity.y
-        else:
-            curXVel = self.lastXVelocity
-            curYVel = self.lastYVelocity
-        self.distanceX += (self.lastXVelocity + curXVel) / 2.0 / 8
-        self.distanceY += (self.lastYVelocity + curYVel) / 2.0 / 8
+    def odomCb(self, msg):
+        curXVel = msg.twist.linear.x
+        curYVel = msg.twist.linear.y
+        self.distanceX += (self.lastXVelocity + curXVel) / 2.0 / 30
+        self.distanceY += (self.lastYVelocity + curYVel) / 2.0 / 30
         self.lastXVelocity = curXVel
         self.lastYVelocity = curYVel
 

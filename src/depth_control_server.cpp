@@ -25,7 +25,7 @@ public:
 
   ~DepthControlActionServer(void)
   {
-      ros::Publisher depth_pub = nh_.<riptide_msgs::DepthCommand>advertise("/command/depth",1000);
+      ros::Publisher depth_pub = nh_.<riptide_msgs::DepthCommand>advertise("command/depth",1000);
   }
 
   void executeCB(const riptide_controllers::depth_commandGoalConstPtr &goal)

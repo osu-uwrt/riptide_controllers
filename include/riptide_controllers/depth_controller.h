@@ -5,18 +5,18 @@
 #include "control_toolbox/pid.h"
 #include "geometry_msgs/Vector3Stamped.h"
 #include "tf/transform_listener.h"
-#include "riptide_msgs/Depth.h"
 #include "riptide_msgs/DepthCommand.h"
-#include "riptide_msgs/Imu.h"
+#include "nav_msgs/Odometry.h"
 #include "riptide_msgs/ResetControls.h"
 #include "riptide_msgs/ControlStatus.h"
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 using namespace std;
 
 class DepthController
 {
   private:
     // Comms
-    ros::NodeHandle nh;
+    ros::NodeHandle nh, private_nh;
     ros::Subscriber depth_sub, imu_sub, cmd_sub;
     ros::Publisher cmd_pub, status_pub;
 
@@ -29,9 +29,7 @@ class DepthController
 
     riptide_msgs::ControlStatus status_msg;
 
-    tf::Matrix3x3 R_b2w, R_w2b;
-    tf::Vector3 tf;
-    float phi, theta;
+    tf2::Quaternion quat;
 
     //PID
     double depth_error, depth_error_dot;
@@ -54,8 +52,7 @@ class DepthController
     template <typename T>
     void LoadParam(string param, T &var);
     void CommandCB(const riptide_msgs::DepthCommand::ConstPtr &cmd);
-    void DepthCB(const riptide_msgs::Depth::ConstPtr &depth_msg);
-    void ImuCB(const riptide_msgs::Imu::ConstPtr &imu_msg);
+    void OdomCB(const nav_msgs::Odometry::ConstPtr &odom_msg);
  };
 
  #endif

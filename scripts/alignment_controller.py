@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 import rospy
-from riptide_msgs.msg import AlignmentCommand, DepthCommand, LinearCommand, Depth
+from riptide_msgs.msg import AlignmentCommand, DepthCommand, LinearCommand
+from nav_msgs.msg import Odometry
 from darknet_ros_msgs.msg import BoundingBoxes
 from std_msgs.msg import Float64, Int32, Int8
 from geometry_msgs.msg import Vector3
@@ -35,8 +36,8 @@ class AlignmentController():
                     self.watchdog_timer.shutdown()
             self.shutdown()
 
-    def depthCb(self, msg):
-        self.currentDepth = msg.depth
+    def odomCb(self, msg):
+        self.currentDepth = msg.pose.pose.position.z
 
     def cameraSelectionCb(self, msg):
         if msg.data != self.currentCam:
@@ -54,13 +55,13 @@ class AlignmentController():
                 self.z_error /= (1 + (abs(self.x_error) + abs(self.y_error)) / 5)
 
                 if self.currentCam == 0:
-                    YPub.publish(min(self.MAX_FORCE, max(-self.MAX_FORCE, self.x_error * self.Y_FORCE_P)), LinearCommand.FORCE)
+                    YPub.publish(min(self.MAX_FORCE, max(-self.MAX_FORCE, -self.x_error * self.Y_FORCE_P)), LinearCommand.FORCE)
                     XPub.publish(min(self.MAX_FORCE, max(-self.MAX_FORCE, -self.z_error * self.X_FORCE_P)), LinearCommand.FORCE)
-                    depthPub.publish(True, self.currentDepth + self.y_error * self.DEPTH_FORCE_P)
+                    depthPub.publish(True, self.currentDepth - self.y_error * self.DEPTH_FORCE_P)
                 else:
-                    YPub.publish(min(self.MAX_FORCE, max(-self.MAX_FORCE, self.x_error * self.Y_FORCE_P)), LinearCommand.FORCE)
+                    YPub.publish(min(self.MAX_FORCE, max(-self.MAX_FORCE, -self.x_error * self.Y_FORCE_P)), LinearCommand.FORCE)
                     XPub.publish(min(self.MAX_FORCE, max(-self.MAX_FORCE, -self.y_error * self.X_FORCE_P)), LinearCommand.FORCE)
-                    depthPub.publish(True, self.currentDepth - self.z_error * self.DEPTH_FORCE_P)
+                    depthPub.publish(True, self.currentDepth + self.z_error * self.DEPTH_FORCE_P)
 
     def shutdown(self, timer = None):
         YPub.publish(0, LinearCommand.FORCE)
@@ -75,9 +76,9 @@ class AlignmentController():
         
 alignmentController = AlignmentController()
 
-XPub = rospy.Publisher("/command/x", LinearCommand, queue_size=5)
-YPub = rospy.Publisher("/command/y", LinearCommand, queue_size=5)
-depthPub = rospy.Publisher("/command/depth", DepthCommand, queue_size=5)
+XPub = rospy.Publisher("command/x", LinearCommand, queue_size=5)
+YPub = rospy.Publisher("command/y", LinearCommand, queue_size=5)
+depthPub = rospy.Publisher("command/depth", DepthCommand, queue_size=5)
 
 
    
@@ -91,10 +92,10 @@ if __name__ == '__main__':
     rospy.init_node("alignment_controller")
 
     # Set subscribers
-    rospy.Subscriber("/command/camera", Int8, alignmentController.cameraSelectionCb)
-    rospy.Subscriber("/command/alignment", AlignmentCommand, alignmentController.cmdCb)
-    rospy.Subscriber("/state/bboxes", BoundingBoxes, alignmentController.bboxCb)
-    rospy.Subscriber("/state/depth", Depth, alignmentController.depthCb)
+    rospy.Subscriber("command/camera", Int8, alignmentController.cameraSelectionCb)
+    rospy.Subscriber("command/alignment", AlignmentCommand, alignmentController.cmdCb)
+    rospy.Subscriber("state/bboxes", BoundingBoxes, alignmentController.bboxCb)
+    rospy.Subscriber("odometry/filtered", Odometry, alignmentController.odomCb)
     
     Server(AlignmentControllerConfig, dynamicReconfigureCb)
 
