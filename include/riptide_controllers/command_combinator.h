@@ -13,7 +13,7 @@ class CommandCombinator
 {
   private:
     // Comms
-    ros::NodeHandle nh;
+    ros::NodeHandle nh, private_nh;
     ros::Subscriber x_sub, y_sub, z_sub, moment_sub, depth_sub;
     ros::Publisher cmd_pub;
 

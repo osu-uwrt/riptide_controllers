@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 
 import rospy
-from riptide_msgs.msg import Depth, AttitudeCommand, Imu
+from riptide_msgs.msg import AttitudeCommand
+from nav_msgs.msg import Odometry
 from std_msgs.msg import Float32, Header
 from geometry_msgs.msg import Vector3Stamped, Vector3
 from dynamic_reconfigure.server import Server
 from riptide_controllers.cfg import AttitudeControllerConfig
+from tf.transformations import euler_from_quaternion
 from math import sin, cos, tan
 import numpy as np
 
 D2R = 3.14159265/180
+R2D = 1/D2R
 
 class RotationController():
 
@@ -57,21 +60,23 @@ rollController = RotationController()
 pitchController = RotationController()
 yawController = RotationController()
 
-momentPub = rospy.Publisher("/command/moment", Vector3Stamped, queue_size=5)
+momentPub = rospy.Publisher("command/moment", Vector3Stamped, queue_size=5)
 
-def imuCb(msg):
-    r = msg.rpy_deg.x * D2R
-    p = msg.rpy_deg.y * D2R
-    ang_vel = np.matrix([[msg.ang_vel_deg.x], [msg.ang_vel_deg.y], [msg.ang_vel_deg.z]])
+def odomCb(msg):
+    quat = msg.pose.pose.orientation
+    quat = [quat.x, quat.y, quat.z, quat.w]
+    r, p, y = euler_from_quaternion(quat)
+    ang_vel = msg.twist.twist.angular
+    ang_vel = np.matrix([[ang_vel.x], [ang_vel.y], [ang_vel.z]])*R2D
     conv_mat = np.matrix([[1, sin(r)*tan(p), cos(r)*tan(p)],
                           [0, cos(r)       , -sin(r)],
                           [0, sin(r)/cos(p), cos(r)/cos(p)]])
     euler_dot = conv_mat * ang_vel
 
     # Update state of each controller
-    rollController.updateState(msg.rpy_deg.x, euler_dot.item(0))
-    pitchController.updateState(msg.rpy_deg.y, euler_dot.item(1))
-    yawController.updateState(msg.rpy_deg.z, euler_dot.item(2))
+    rollController.updateState(r*R2D, euler_dot.item(0))
+    pitchController.updateState(p*R2D, euler_dot.item(1))
+    yawController.updateState(y*R2D, euler_dot.item(2))
 
     # Publish new moments
     header = Header()
@@ -96,10 +101,10 @@ if __name__ == '__main__':
     rospy.init_node("attitude_controller")
 
     # Set subscribers
-    rospy.Subscriber("/command/roll", AttitudeCommand, rollController.cmdCb)
-    rospy.Subscriber("/command/pitch", AttitudeCommand, pitchController.cmdCb)
-    rospy.Subscriber("/command/yaw", AttitudeCommand, yawController.cmdCb)
-    rospy.Subscriber("/state/imu", Imu, imuCb)
+    rospy.Subscriber("command/roll", AttitudeCommand, rollController.cmdCb)
+    rospy.Subscriber("command/pitch", AttitudeCommand, pitchController.cmdCb)
+    rospy.Subscriber("command/yaw", AttitudeCommand, yawController.cmdCb)
+    rospy.Subscriber("odometry/filtered", Odometry, odomCb)
     
     Server(AttitudeControllerConfig, dynamicReconfigureCb)
 

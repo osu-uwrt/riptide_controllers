@@ -18,7 +18,7 @@ class AlignAction(object):
     cam_height = 482
 
     def __init__(self):
-        self.alignPub = rospy.Publisher("/command/alignment", AlignmentCommand, queue_size=1)
+        self.alignPub = rospy.Publisher("command/alignment", AlignmentCommand, queue_size=1)
         self._as = actionlib.SimpleActionServer("align", riptide_controllers.msg.AlignAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
@@ -32,7 +32,7 @@ class AlignAction(object):
 
         count = 0
         while count < 5:
-            bbox_msg = rospy.wait_for_message("/state/bboxes", BoundingBoxes)
+            bbox_msg = rospy.wait_for_message("state/bboxes", BoundingBoxes)
             for bbox in bbox_msg.bounding_boxes:
                 if bbox.Class == goal.object:
                     self.bbox_x = (bbox.xmin + bbox.xmax) / 2 - self.cam_width / 2
@@ -51,7 +51,7 @@ class AlignAction(object):
         if not goal.hold:
             self.alignPub.publish("", 0)  
     
-        rospy.loginfo("Alignment succeed")
+        rospy.loginfo("Alignment succeeded")
         self._as.set_succeeded()
 
 if __name__ == '__main__':

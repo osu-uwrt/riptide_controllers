@@ -1,10 +1,12 @@
 #! /usr/bin/env python
 import rospy
 import actionlib
+import message_filters
 
 from riptide_msgs.msg import Dvl, LinearCommand
 from geometry_msgs.msg import Vector3
 from darknet_ros_msgs.msg import BoundingBoxes
+from sensor_msgs.msg import Image
 from stereo_msgs.msg import DisparityImage
 from cv_bridge import CvBridge, CvBridgeError
 import riptide_controllers.msg
@@ -26,24 +28,37 @@ class GetDistance(object):
       
     def execute_cb(self, goal):
         rospy.loginfo("Finding distance to " + goal.object)
-        self.image = None
-        sub = rospy.Subscriber("/stereo/disparity", DisparityImage, self.imgCB)
+        self.goal = goal
+        stereoSub = message_filters.Subscriber("stereo/disparity", DisparityImage)
+        bboxSub = message_filters.Subscriber("state/bboxes", BoundingBoxes)
+        ts = message_filters.TimeSynchronizer([stereoSub, bboxSub], 20)
+        ts.registerCallback(self.imgCB)
 
-        readings = []
-        while len(readings) < 5:
-            bboxes = rospy.wait_for_message("/state/bboxes", BoundingBoxes).bounding_boxes
-            while len([x for x in bboxes if x.Class == goal.object]) == 0 or self.image is None:
-                bboxes = rospy.wait_for_message("/state/bboxes", BoundingBoxes).bounding_boxes
+        self.readings = []
+        while len(self.readings) < 5:
+            if self._as.is_preempt_requested():
+                rospy.loginfo('Preempted Get Distance')
+                stereoSub.sub.unregister()
+                bboxSub.sub.unregister()
+                self._as.set_preempted()
+                return
+        
+        stereoSub.sub.unregister()
+        bboxSub.sub.unregister()
+        self._result.distance = np.median(self.readings)
+        rospy.loginfo("Distance: %f"%self._result.distance)
+        self._as.set_succeeded(self._result)
 
-                if self._as.is_preempt_requested():
-                    rospy.loginfo('Preempted Get Distance')
-                    sub.unregister()
-                    self._as.set_preempted()
-                    return
-
-            bbox = [x for x in bboxes if x.Class == goal.object][0]
-
-            sample_region = self.image[bbox.ymin:bbox.ymax, bbox.xmin:bbox.xmax].reshape((-1,1))
+    def imgCB(self, stereo, bboxMsg):
+        bboxes = bboxMsg.bounding_boxes
+        if len([x for x in bboxes if x.Class == self.goal.object]) != 0:
+            bbox = [x for x in bboxes if x.Class == self.goal.object][0]
+            
+            try:
+                image = bridge.imgmsg_to_cv2(stereo.image)
+            except CvBridgeError as e:
+                print(e)
+            sample_region = image[bbox.ymin:bbox.ymax, bbox.xmin:bbox.xmax].reshape((-1,1))
             
             # Define criteria = ( type, max_iter = 10 , epsilon = 1.0 )
             criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
@@ -61,20 +76,8 @@ class GetDistance(object):
                 disparity = centers[maxLabel][0]
                 labels = [l for l in labels if l != maxLabel]
 
-            readings.append(self.f * self.T / disparity)
-
-        sub.unregister()
-        self._result.distance =  np.median(readings)
-        rospy.loginfo("Distance: %f"%self._result.distance)
-        self._as.set_succeeded(self._result)
-
-    def imgCB(self, msg):
-        self.f = msg.f
-        self.T = msg.T
-        try:
-            self.image = bridge.imgmsg_to_cv2(msg.image)
-        except CvBridgeError as e:
-            print(e)
+            self.readings.append(stereo.f * stereo.T / disparity)
+        
         
         
 if __name__ == '__main__':

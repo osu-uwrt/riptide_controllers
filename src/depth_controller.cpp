@@ -24,21 +24,17 @@ int main(int argc, char **argv)
   }
 }
 
-DepthController::DepthController() : nh("~")
+DepthController::DepthController() : nh(), private_nh("~")
 {
   ros::NodeHandle dcpid("depth_controller");
-  R_b2w.setIdentity();
-  R_w2b.setIdentity();
-  tf.setValue(0, 0, 0);
 
   depth_controller_pid.init(dcpid, false);
 
-  cmd_sub = nh.subscribe<riptide_msgs::DepthCommand>("/command/depth", 1, &DepthController::CommandCB, this);
-  depth_sub = nh.subscribe<riptide_msgs::Depth>("/state/depth", 1, &DepthController::DepthCB, this);
-  imu_sub = nh.subscribe<riptide_msgs::Imu>("/state/imu", 1, &DepthController::ImuCB, this);
+  cmd_sub = nh.subscribe<riptide_msgs::DepthCommand>("command/depth", 1, &DepthController::CommandCB, this);
+  depth_sub = nh.subscribe<nav_msgs::Odometry>("odometry/filtered", 1, &DepthController::OdomCB, this);
 
-  cmd_pub = nh.advertise<geometry_msgs::Vector3Stamped>("/command/force_depth", 1);
-  status_pub = nh.advertise<riptide_msgs::ControlStatus>("/status/controls/depth", 1);
+  cmd_pub = nh.advertise<geometry_msgs::Vector3Stamped>("command/force_depth", 1);
+  status_pub = nh.advertise<riptide_msgs::ControlStatus>("status/controls/depth", 1);
 
   DepthController::LoadParam<double>("max_depth", MAX_DEPTH);
   DepthController::LoadParam<double>("max_depth_error", MAX_DEPTH_ERROR);
@@ -65,7 +61,7 @@ void DepthController::LoadParam(string param, T &var)
 {
   try
   {
-    if (!nh.getParam(param, var))
+    if (!private_nh.getParam(param, var))
     {
       throw 0;
     }
@@ -82,7 +78,7 @@ void DepthController::LoadParam(string param, T &var)
 void DepthController::UpdateError()
 {
   sample_duration = ros::Time::now() - sample_start;
-  dt = sample_duration.toSec();
+  dt = sample_duration.toSec() + 0.000000001;
 
   if (pid_depth_active)
   {
@@ -97,9 +93,9 @@ void DepthController::UpdateError()
     output = depth_controller_pid.computeCommand(depth_error, depth_error_dot, sample_duration);
 
     cmd_force.header.stamp = ros::Time::now();
-    cmd_force.vector.x = -output * sin(theta);
-    cmd_force.vector.y = output * sin(phi) * cos(theta);
-    cmd_force.vector.z = output * cos(phi) * cos(theta);
+    tf2::Vector3 force(0, 0, output);
+    force = tf2::quatRotate(quat.inverse(), force);
+    cmd_force.vector = tf2::toMsg(force);
     cmd_pub.publish(cmd_force);
 
     status_msg.header.stamp = ros::Time::now();
@@ -134,7 +130,7 @@ void DepthController::CommandCB(const riptide_msgs::DepthCommand::ConstPtr &cmd)
     IS_DEPTH_RESET = false;
     depth_cmd = cmd->depth;
     depth_cmd = DepthController::Constrain(depth_cmd, MAX_DEPTH);
-    if (depth_cmd < 0) // Min. depth is zero
+    if (depth_cmd > 0) // Min. depth is zero
       depth_cmd = 0;
     status_msg.reference = depth_cmd;
   }
@@ -144,19 +140,12 @@ void DepthController::CommandCB(const riptide_msgs::DepthCommand::ConstPtr &cmd)
   }
 }
 
-// Subscribe to state/depth
-void DepthController::DepthCB(const riptide_msgs::Depth::ConstPtr &depth_msg)
+// Subscribe to odom
+void DepthController::OdomCB(const nav_msgs::Odometry::ConstPtr &odom_msg)
 {
-  current_depth = depth_msg->depth;
+  tf2::fromMsg(odom_msg->pose.pose.orientation, quat);
+  current_depth = odom_msg->pose.pose.position.z;
   status_msg.current = current_depth;
-  DepthController::UpdateError();
-}
-
-// Create rotation matrix from IMU orientation
-void DepthController::ImuCB(const riptide_msgs::Imu::ConstPtr &imu_msg)
-{
-  phi = imu_msg->rpy_deg.x * PI / 180;
-  theta = imu_msg->rpy_deg.y * PI / 180;
   DepthController::UpdateError();
 }
 

@@ -13,7 +13,7 @@ class GoToTaskAction(object):
     count = 0
 
     def __init__(self):
-        self.taskPub = rospy.Publisher("/state/task", Dvl, queue_size=1)
+        self.taskPub = rospy.Publisher("state/task", Dvl, queue_size=1)
         self._as = actionlib.SimpleActionServer("go_to_task", riptide_controllers.msg.GoToTaskAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
@@ -23,9 +23,9 @@ class GoToTaskAction(object):
             rospy.loginfo("Going to task " + doc["tasks"][count]["name"])
             self.taskPub.publish(goal.position, Dvl.vehicle_pos)
 
-            while ( abs(rospy.wait_for_message("/state/dvl2", Dvl).vehicle_pos.x - goal.position.x) > 0.1 
-                  and abs(rospy.wait_for_message("/state/dvl2", Dvl).vehicle_pos.y - goal.position.y) > 0.1
-                  and abs(rospy.wait_for_message("/state/dvl2", Dvl).vehicle_pos.z - goal.position.z) > 0.1):
+            while ( abs(rospy.wait_for_message("state/dvl2", Dvl).vehicle_pos.x - goal.position.x) > 0.1 
+                  and abs(rospy.wait_for_message("state/dvl2", Dvl).vehicle_pos.y - goal.position.y) > 0.1
+                  and abs(rospy.wait_for_message("state/dvl2", Dvl).vehicle_pos.z - goal.position.z) > 0.1):
 
                   rospy.sleep(0.05)
 

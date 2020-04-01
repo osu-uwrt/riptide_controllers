@@ -2,14 +2,15 @@
 import rospy
 import actionlib
 
-from riptide_msgs.msg import DepthCommand, Depth
+from riptide_msgs.msg import DepthCommand
+from nav_msgs.msg import Odometry
 import riptide_controllers.msg
 
 
 class GoToDepthAction(object):
 
     def __init__(self):
-        self.depthPub = rospy.Publisher("/command/depth", DepthCommand, queue_size=1)
+        self.depthPub = rospy.Publisher("command/depth", DepthCommand, queue_size=1)
         self._as = actionlib.SimpleActionServer("go_to_depth", riptide_controllers.msg.GoToDepthAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
 
@@ -18,7 +19,7 @@ class GoToDepthAction(object):
         rospy.loginfo("Going to depth " + str(goal.depth)+ "m")
         self.depthPub.publish(True, goal.depth)
 
-        while abs(rospy.wait_for_message("/state/depth", Depth).depth - goal.depth) > 0.1:
+        while abs(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.position.z - goal.depth) > 0.1:
             rospy.sleep(0.05)
 
             if self._as.is_preempt_requested():

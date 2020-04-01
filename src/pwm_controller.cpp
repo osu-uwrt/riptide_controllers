@@ -21,15 +21,15 @@ int main(int argc, char **argv)
   pwm_controller.Loop();
 }
 
-PWMController::PWMController() : nh("~")
+PWMController::PWMController() : nh(), private_nh("~")
 {
-  cmd_sub = nh.subscribe<riptide_msgs::ThrustStamped>("/command/thrust", 1, &PWMController::ThrustCB, this);
-  kill_sub = nh.subscribe<riptide_msgs::SwitchState>("/state/switches", 1, &PWMController::SwitchCB, this);
-  reset_sub = nh.subscribe<riptide_msgs::ResetControls>("/controls/reset", 1, &PWMController::ResetController, this);
-  pwm_pub = nh.advertise<riptide_msgs::PwmStamped>("/command/pwm", 1);
+  cmd_sub = nh.subscribe<riptide_msgs::ThrustStamped>("command/thrust", 1, &PWMController::ThrustCB, this);
+  kill_sub = nh.subscribe<riptide_msgs::SwitchState>("state/switches", 1, &PWMController::SwitchCB, this);
+  reset_sub = nh.subscribe<riptide_msgs::ResetControls>("controls/reset", 1, &PWMController::ResetController, this);
+  pwm_pub = nh.advertise<riptide_msgs::PwmStamped>("command/pwm", 1);
 
-  PWMController::LoadParam<std::string>("properties_file", properties_file);
-  properties = YAML::LoadFile(properties_file);
+  nh.getParam("vehicle_file", vehicle_file);
+  properties = YAML::LoadFile(vehicle_file);
   PWMController::LoadThrusterProperties();
 
   alive_timeout = ros::Duration(2);
@@ -45,7 +45,7 @@ void PWMController::LoadParam(std::string param, T &var)
 {
   try
   {
-    if (!nh.getParam(param, var))
+    if (!private_nh.getParam(param, var))
     {
       throw 0;
     }
@@ -62,10 +62,10 @@ void PWMController::LoadParam(std::string param, T &var)
 void PWMController::LoadThrusterProperties()
 {
   // Load thruster types
-  int numThrusters = properties["properties"]["thrusters"].size();
+  int numThrusters = properties["thrusters"].size();
   for (int i = 0; i < numThrusters; i++)
   {
-    int type = properties["properties"]["thrusters"][i]["type"].as<int>();
+    int type = properties["thrusters"][i]["type"].as<int>();
     thrusterType[i] = type;
   }
   

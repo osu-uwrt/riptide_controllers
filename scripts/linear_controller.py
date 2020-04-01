@@ -2,7 +2,7 @@
 
 import rospy
 from riptide_msgs.msg import LinearCommand
-from nortek_dvl.msg import Dvl
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Vector3
 from std_msgs.msg import Float64, Float32, Header
 from dynamic_reconfigure.server import Server
@@ -44,15 +44,15 @@ class LinearController():
         
         
 
-XPub = rospy.Publisher("/command/force_x", Float64, queue_size=5)
-YPub = rospy.Publisher("/command/force_y", Float64, queue_size=5)
+XPub = rospy.Publisher("command/force_x", Float64, queue_size=5)
+YPub = rospy.Publisher("command/force_y", Float64, queue_size=5)
 
 xController = LinearController(XPub)
 yController = LinearController(YPub)
 
-def dvlCb(msg):
-    xController.updateState(msg.velocity.x)
-    yController.updateState(msg.velocity.y)
+def odomCb(msg):
+    xController.updateState(msg.twist.twist.linear.x)
+    yController.updateState(msg.twist.twist.linear.y)
 
     # Publish new forces
     XPub.publish(xController.force)
@@ -71,9 +71,9 @@ if __name__ == '__main__':
     rospy.init_node("linear_controller")
 
     # Set subscribers
-    rospy.Subscriber("/command/x", LinearCommand, xController.cmdCb)
-    rospy.Subscriber("/command/y", LinearCommand, yController.cmdCb)
-    rospy.Subscriber("/state/dvl", Dvl, dvlCb)
+    rospy.Subscriber("command/x", LinearCommand, xController.cmdCb)
+    rospy.Subscriber("command/y", LinearCommand, yController.cmdCb)
+    rospy.Subscriber("odometry/filtered", Odometry, odomCb)
     
     Server(LinearControllerConfig, dynamicReconfigureCb)
 
