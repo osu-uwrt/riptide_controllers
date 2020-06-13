@@ -61,8 +61,10 @@ pitchController = RotationController()
 yawController = RotationController()
 
 momentPub = rospy.Publisher("command/moment", Vector3Stamped, queue_size=5)
+lastMoment = None
 
 def odomCb(msg):
+    global lastMoment
     quat = msg.pose.pose.orientation
     quat = [quat.x, quat.y, quat.z, quat.w]
     r, p, y = euler_from_quaternion(quat)
@@ -86,7 +88,16 @@ def odomCb(msg):
                           [0, cos(r),  sin(r)*cos(p)],
                           [0, -sin(r), cos(r)*cos(p)]])
     moment = conv_mat * moment
-    momentPub.publish(header, Vector3(moment.item(0), moment.item(1), moment.item(2)))
+    momentVector = Vector3(moment.item(0), moment.item(1), moment.item(2))
+
+    if (
+        lastMoment == None
+        or lastMoment.x != momentVector.x
+        or lastMoment.y != momentVector.y 
+        or lastMoment.z != momentVector.z
+    ):
+        momentPub.publish(header, momentVector)
+        lastMoment = momentVector
 
 def dynamicReconfigureCb(config, level):
     # On dynamic reconfiguration
