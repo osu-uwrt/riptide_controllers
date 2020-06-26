@@ -1,0 +1,3 @@
+<launch>
+  <node pkg="riptide_controllers" type="quaternion_controller.py" name="quaternion_controller" output="screen" />
+</launch>

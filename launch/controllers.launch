@@ -7,4 +7,5 @@
 	<include file="$(find riptide_controllers)/launch/alignment_controller.launch" />
 	<include file="$(find riptide_controllers)/launch/linear_controller.launch" />
 	<include file="$(find riptide_controllers)/launch/actions.launch" />
+	<node pkg="riptide_controllers" type="controller.py" name="controller" output="screen" />
 </launch>
