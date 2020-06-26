@@ -176,12 +176,12 @@ class AngularCascadedPController(CascadedPController):
 class PhysicsCompensator:
     def __init__(self):
         self.mass = 1
-        self.com = np.array(1, 1, 1)
-        self.inertia = np.array(1, 1, 1)
-        self.linearDrag = np.array(1, 1, 1, 1, 1, 1)
-        self.quadraticDrag = np.array(1, 1, 1, 1, 1, 1)
+        self.com = np.array([1, 1, 1])
+        self.inertia = np.array([1, 1, 1])
+        self.linearDrag = np.array([1, 1, 1, 1, 1, 1])
+        self.quadraticDrag = np.array([1, 1, 1, 1, 1, 1])
         self.buoyantForce = 1
-        self.cob = np.array(1, 1, 1)
+        self.cob = np.array([1, 1, 1])
 
     def accelToNetForce(self, odom, linearAccel, angularAccel):
         """ 
