@@ -173,7 +173,7 @@ class AngularCascadedPController(CascadedPController):
 
     
 
-class PhysicsCompensator:
+class AccelerationCalculator:
     def __init__(self):
         self.mass = 1
         self.com = np.array([1, 1, 1])
@@ -209,7 +209,7 @@ class ControllerNode:
     def __init__(self):
         self.linearController = LinearCascadedPController()
         self.angularController = AngularCascadedPController()
-        self.physicsCompensator = PhysicsCompensator()
+        self.physicsCompensator = AccelerationCalculator()
 
         rospy.Subscriber("odometry/filtered", Odometry, self.updateState)
         rospy.Subscriber("orientation", Quaternion, self.angularController.setTargetPosition)
