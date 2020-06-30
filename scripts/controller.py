@@ -74,6 +74,9 @@ class CascadedPController:
         np.array: 3 dimensional vector representing corrective body-frame acceleration.
     
         """
+        currentVelocity = msgToNumpy(odom.twist.twist.linear) # [1 0 0]
+        targetVelocity = self.targetVelocity # [0 0 1]
+        outputAccel = (targetVelocity - currentVelocity) * self.velocityP # [-1 0 1]
         # TODO: Make function
         return np.zeros(3)
 
@@ -147,11 +150,6 @@ class CascadedPController:
             netAccel += self.targetAcceleration
 
         return netAccel
-
-   
-
-
-
 
 class LinearCascadedPController(CascadedPController):
 
