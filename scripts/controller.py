@@ -209,7 +209,7 @@ class ControllerNode:
     def __init__(self):
         self.linearController = LinearCascadedPController()
         self.angularController = AngularCascadedPController()
-        self.physicsCompensator = AccelerationCalculator()
+        self.accelerationCalculator = AccelerationCalculator()
 
         rospy.Subscriber("odometry/filtered", Odometry, self.updateState)
         rospy.Subscriber("orientation", Quaternion, self.angularController.setTargetPosition)
@@ -222,9 +222,9 @@ class ControllerNode:
         self.forcePub = rospy.Publisher("net_force", Vector3, queue_size=5)
         self.torquePub = rospy.Publisher("net_torque", Vector3, queue_size=5)
 
-        
         self.lastTorque = None
         self.lastForce = None
+        self.off = False
 
     def updateState(self, odomMsg):
         linearAccel = self.linearController.update(odomMsg)
@@ -234,7 +234,7 @@ class ControllerNode:
             self.off = False
 
         if not self.off:
-            netForce, netTorque = self.physicsCompensator.accelToNetForce(odomMsg, linearAccel, angularAccel)
+            netForce, netTorque = self.accelerationCalculator.accelToNetForce(odomMsg, linearAccel, angularAccel)
         else:
             netForce, netTorque = np.zeros(3), np.zeros(3)
 
