@@ -203,7 +203,7 @@ class AccelerationCalculator:
         netForce = linearAccel * self.mass
         netTorque = angularAccel * self.inertia
 
-        bodyFrameBuoyancy = worldToBody(odom.pose.pose.orientation, np.array([0, 0, self.volume * self.gravity * self.density])
+        bodyFrameBuoyancy = worldToBody(odom.pose.pose.orientation, np.array([0, 0, self.volume * self.gravity * self.density]))
         netForce -= bodyFrameBuoyancy
         netTorque -= np.cross((self.cob - self.com), bodyFrameBuoyancy)
 
