@@ -178,8 +178,10 @@ class AccelerationCalculator:
         self.inertia = np.array([1, 1, 1])
         self.linearDrag = np.array([1, 1, 1, 1, 1, 1])
         self.quadraticDrag = np.array([1, 1, 1, 1, 1, 1])
-        self.buoyantForce = 1
-        self.cob = np.array([1, 1, 1])
+        self.volume = 1
+        self.cob = np.array([1.1, 1, 1])
+        self.gravity = 9.81
+        self.density = 997
 
     def accelToNetForce(self, odom, linearAccel, angularAccel):
         """ 
@@ -197,8 +199,20 @@ class AccelerationCalculator:
         np.array: 3 dimensional vector representing net body-frame torque.
 
         """
-        # TODO: Make function
-        return linearAccel, angularAccel
+
+        netForce = linearAccel * self.mass
+        netTorque = angularAccel * self.inertia
+
+        bodyFrameBuoyancy = worldToBody(odom.pose.pose.orientation, np.array([0, 0, self.volume * self.gravity * self.density])
+        netForce -= bodyFrameBuoyancy
+        netTorque -= np.cross((self.cob - self.com), bodyFrameBuoyancy)
+
+        # TODO: precession
+
+        # TODO: drag
+
+
+        return netForce, netTorque
 
     
 
