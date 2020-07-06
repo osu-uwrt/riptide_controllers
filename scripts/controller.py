@@ -74,11 +74,15 @@ class CascadedPController:
         np.array: 3 dimensional vector representing corrective body-frame acceleration.
     
         """
-        currentVelocity = msgToNumpy(odom.twist.twist.linear) # [1 0 0]
         targetVelocity = self.targetVelocity # [0 0 1]
-        outputAccel = (targetVelocity - currentVelocity) * self.velocityP # [-1 0 1]
-        # TODO: Make function
-        return np.zeros(3)
+
+        if targetVelocity is not None:
+            currentVelocity = msgToNumpy(odom.twist.twist.linear) # [1 0 0]
+            outputAccel = (targetVelocity - currentVelocity) * self.positionP # [-1 0 1]
+            return outputAccel
+            # TODO: Make function          
+        else:
+            return np.zeros(3)
 
     def setTargetPosition(self, targetPosition):
         """ 
@@ -157,8 +161,30 @@ class LinearCascadedPController(CascadedPController):
         super(LinearCascadedPController, self).__init__()
 
     def computeCorrectiveVelocity(self, odom):
-        # TODO: Make function
-        return np.zeros(3)
+
+       """ 
+        Computes a corrective velocity.
+    
+        If self.targetPosition is not None, will return a corrective body-frame velocity that moves the robot in the direction of self.targetPosiiton. Otherwise returns 0 vector.
+    
+        Parameters:
+        odom (Odometry): The latest odometry message
+
+        Returns: 
+        np.array: 3 dimensional vector representing corrective body-frame velocity.
+    
+        """
+
+        targetPosition = self.targetPosition # [0 0 1]
+
+        if targetPosition is not None:
+            currentPosition = msgToNumpy(odom.pose.pose.position) # [1 0 0]
+            outputVel = (targetPosition - currentPosition) * self.velocityP # [-1 0 1]
+            orientation = odom.pose.pose.orientation
+            return worldToBody(orientation, outputVel)
+            # TODO: Make function          
+        else:
+            return np.zeros(3)
 
 class AngularCascadedPController(CascadedPController):
 
