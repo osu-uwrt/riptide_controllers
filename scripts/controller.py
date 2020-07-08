@@ -74,11 +74,11 @@ class CascadedPController:
         np.array: 3 dimensional vector representing corrective body-frame acceleration.
     
         """
-        targetVelocity = self.targetVelocity # [0 0 1]
+        targetVelocity = self.targetVelocity
 
-        if targetVelocity is not None:
-            currentVelocity = msgToNumpy(odom.twist.twist.linear) # [1 0 0]
-            outputAccel = (targetVelocity - currentVelocity) * self.velocityP # should there be different p values for linear and angular?
+        if targetVelocity is not None:            
+            currectiveVelocity = msgToNumpy(odom.twist.twist.linear) # will we need to funcitons for linear and angular so it knows what to get from odom msg
+            outputAccel = ((targetVelocity + correctiveVelocity) - currentVelocity) * self.velocityP
             return outputAccel
             # TODO: Make function          
         else:
