@@ -2,7 +2,7 @@
 
 import rospy
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Quaternion, Vector3
+from geometry_msgs.msg import Quaternion, Vector3, Twist
 from std_msgs.msg import Empty
 from tf.transformations import quaternion_multiply, quaternion_inverse, quaternion_slerp
 import numpy as np
@@ -168,8 +168,7 @@ class LinearCascadedPController(CascadedPController):
             currentPosition = msgToNumpy(odom.pose.pose.position) # [1 0 0]
             outputVel = (targetPosition - currentPosition) * self.velocityP # [-1 0 1]
             orientation = odom.pose.pose.orientation
-            return worldToBody(orientation, outputVel)
-            # TODO: Make function          
+            return worldToBody(orientation, outputVel)   
         else:
             return np.zeros(3)
 
@@ -185,8 +184,7 @@ class AngularCascadedPController(CascadedPController):
             currentPosition = msgToNumpy(odom.pose.pose.orientation)
             outputVel = (targetPosition - currentPosition)
             outputVel = quaternion_multiply(quaternion_inverse(currentPosition), outputVel)[:3] * self.velocityP
-            return outputVel
-            # TODO: Make function          
+            return outputVel        
         else:
             return np.zeros(3)
 
@@ -250,8 +248,7 @@ class ControllerNode:
         rospy.Subscriber("linear_velocity", Vector3, self.linearController.setTargetVelocity)
         rospy.Subscriber("disable_linear", Empty, self.linearController.disable)
         rospy.Subscriber("off", Empty, self.turnOff)
-        self.forcePub = rospy.Publisher("net_force", Vector3, queue_size=5)
-        self.torquePub = rospy.Publisher("net_torque", Vector3, queue_size=5)
+        self.forcePub = rospy.Publisher("net_force", Twist, queue_size=5)
 
         self.lastTorque = None
         self.lastForce = None
@@ -272,8 +269,7 @@ class ControllerNode:
         if not np.array_equal(self.lastTorque, netTorque) or \
            not np.array_equal(self.lastForce, netForce):
 
-            self.forcePub.publish(Vector3(*netForce))
-            self.torquePub.publish(Vector3(*netTorque))
+            self.forcePub.publish(Twist(Vector3(*netForce), Vector3(*netTorque)))
             self.lastForce = netForce
             self.lastTorque = netTorque
 
