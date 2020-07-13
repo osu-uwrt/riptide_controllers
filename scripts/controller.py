@@ -7,6 +7,7 @@ from std_msgs.msg import Empty
 from tf.transformations import quaternion_multiply, quaternion_inverse, quaternion_slerp
 import numpy as np
 from abc import ABCMeta, abstractmethod
+import yaml
 
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
@@ -189,14 +190,14 @@ class AngularCascadedPController(CascadedPController):
             return np.zeros(3)
 
 class AccelerationCalculator:
-    def __init__(self):
-        self.mass = 1
-        self.com = np.array([1, 1, 1])
-        self.inertia = np.array([1, 1, 1])
-        self.linearDrag = np.array([1, 1, 1, 1, 1, 1])
-        self.quadraticDrag = np.array([1, 1, 1, 1, 1, 1])
-        self.volume = 1
-        self.cob = np.array([1.1, 1, 1])
+    def __init__(self, config):
+        self.mass = config["mass"]
+        self.com = config["com"]
+        self.inertia = config["inertia"]
+        self.linearDrag = config["linear_damping"]
+        self.quadraticDrag = config["quadratic_damping"]
+        self.volume = config["volume"]
+        self.cob = config["cob"]
         self.gravity = 9.81
         self.density = 997
 
@@ -236,9 +237,13 @@ class AccelerationCalculator:
 class ControllerNode:
 
     def __init__(self):
+        config_path = rospy.get_param("~vehicle_config")
+        with open(config_path, 'r') as stream:
+            config = yaml.safe_load(stream)
+
         self.linearController = LinearCascadedPController()
         self.angularController = AngularCascadedPController()
-        self.accelerationCalculator = AccelerationCalculator()
+        self.accelerationCalculator = AccelerationCalculator(config)
 
         rospy.Subscriber("odometry/filtered", Odometry, self.updateState)
         rospy.Subscriber("orientation", Quaternion, self.angularController.setTargetPosition)
@@ -252,7 +257,7 @@ class ControllerNode:
 
         self.lastTorque = None
         self.lastForce = None
-        self.off = False
+        self.off = True
 
     def updateState(self, odomMsg):
         linearAccel = self.linearController.update(odomMsg)
@@ -277,12 +282,6 @@ class ControllerNode:
         self.angularController.disable()
         self.linearController.disable()
         self.off = True
-
-        
-            
-
-
-
 
 
 if __name__ == '__main__':
