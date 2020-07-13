@@ -168,7 +168,7 @@ class LinearCascadedPController(CascadedPController):
         if targetPosition is not None:
             currentPosition = msgToNumpy(odom.pose.pose.position) # [1 0 0]
             outputVel = (targetPosition - currentPosition) * self.velocityP # [-1 0 1]
-            orientation = odom.pose.pose.orientation
+            orientation = msgToNumpy(odom.pose.pose.orientation)
             return worldToBody(orientation, outputVel)   
         else:
             return np.zeros(3)
