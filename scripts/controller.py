@@ -218,6 +218,8 @@ class AccelerationCalculator:
 
         """
 
+         
+
         netForce = linearAccel * self.mass
         netTorque = angularAccel * self.inertia
 
