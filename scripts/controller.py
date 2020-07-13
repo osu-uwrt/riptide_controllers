@@ -218,19 +218,31 @@ class AccelerationCalculator:
 
         """
 
-         
-
+        # Linear Velocities
+        linearVelo = [
+            odom.twist.twist.linear.x,
+            odom.twist.twist.linear.y,
+            odom.twist.twist.linear.z
+        ]
+        # Angular Velocities
+        angularVelo = [
+            odom.twist.twist.angular.x,
+            odom.twist.twist.angular.y,
+            odom.twist.twist.angular.z
+        ]
+        # Force & Torque Initialization
         netForce = linearAccel * self.mass
         netTorque = angularAccel * self.inertia
-
+        # Forces and Torques Calculation
         bodyFrameBuoyancy = worldToBody(odom.pose.pose.orientation, np.array([0, 0, self.volume * self.gravity * self.density]))
-        netForce -= bodyFrameBuoyancy
-        netTorque -= np.cross((self.cob - self.com), bodyFrameBuoyancy)
-
-        # TODO: precession
-
-        # TODO: drag
-
+        buoyancyTorque = np.cross((self.cob-self.com), bodyFrameBuoyancy)
+        precessionTorque = self.inertia * angularAccel + np.cross(angularVelo, (self.inertia * angularVelo))
+        dragForce = self.linearDrag[:3] * linearVelo + self.quadraticDrag[:3] * abs(linearVelo) * linearVelo
+        dragTorque = self.linearDrag[3:] * angularVelo + self.quadraticDrag[3:] * abs(angularVelo) * angularVelo
+        gravityForce = worldToBody(odom.pose.pose.orientation, np.array([0, 0, - self.gravity * self.mass])) 
+        # Net Calculation
+        netForce = netForce - bodyFrameBuoyancy - dragForce - gravityForce
+        netTorque = netTorque - buoyancyTorque - precessionTorque - dragTorque
 
         return netForce, netTorque
 
