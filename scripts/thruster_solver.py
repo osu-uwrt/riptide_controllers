@@ -8,12 +8,11 @@ import yaml
 from tf.transformations import euler_matrix
 from math import pi
 from scipy.optimize import minimize
-import time
 
 
-def msgToNumpy(msg):
+def msg_to_numpy(msg):
     return np.array([msg.x, msg.y, msg.z])
-    
+
 
 class ThrusterSolverNode:
 
@@ -28,6 +27,7 @@ class ThrusterSolverNode:
         thruster_info = config_file['thrusters']
         self.thruster_coeffs = np.zeros((len(thruster_info), 6))
         com = np.array(config_file["com"])
+        self.max_force = config_file["thruster"]["max_force"]
 
         for i, thruster in enumerate(thruster_info):
             pose = np.array(thruster["pose"])
@@ -42,9 +42,11 @@ class ThrusterSolverNode:
         self.bounds = []
         for i in range(len(thruster_info)):
             self.initial_condition.append(0)
-            self.bounds.append((-1, 1))
+            self.bounds.append((-self.max_force, self.max_force))
         self.initial_condition = tuple(self.initial_condition)
         self.bounds = tuple(self.bounds)
+
+        self.power_priority = 0.001
 
     # Cost function forcing the thruster to output desired net force
     def force_cost(self, thruster_forces, desired_state):
@@ -64,23 +66,25 @@ class ThrusterSolverNode:
 
     def total_cost(self, thruster_forces, desired_state):
         total_cost = self.force_cost(thruster_forces, desired_state)
-        # We care about low power a whole lot less thus the 0.001
-        total_cost += self.power_cost(thruster_forces) * 0.001
+        # We care about low power a whole lot less thus the lower priority
+        total_cost += self.power_cost(thruster_forces) * self.power_priority
         return total_cost
 
     def total_cost_jac(self, thruster_forces, desired_state):
         total_cost_jac = self.force_cost_jac(thruster_forces, desired_state)
-        total_cost_jac += self.power_cost_jac(thruster_forces) * 0.001
+        total_cost_jac += self.power_cost_jac(thruster_forces) * self.power_priority
         return total_cost_jac
 
     def force_cb(self, msg):
         desired_state = np.zeros(6)
-        desired_state[:3] = msgToNumpy(msg.linear)
-        desired_state[3:] = msgToNumpy(msg.angular)
+        desired_state[:3] = msg_to_numpy(msg.linear)
+        desired_state[3:] = msg_to_numpy(msg.angular)
 
-        start = time.time()
         res = minimize(self.total_cost, self.initial_condition, args=(desired_state), method='SLSQP', \
                         jac=self.total_cost_jac, bounds=self.bounds)
+
+        if self.force_cost(res.x, desired_state) > 0.01:
+            rospy.logwarn("Unable to exert requested force")
 
         msg = Float32MultiArray()
         msg.data = res.x

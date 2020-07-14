@@ -31,7 +31,7 @@ def worldToBody(orientation, vector):
 
     vector = np.append(vector, 0)
     orientationInv = quaternion_inverse(orientation)
-    newVector = quaternion_multiply(orientation, quaternion_multiply(vector, orientationInv))
+    newVector = quaternion_multiply(orientationInv, quaternion_multiply(vector, orientation))
     return newVector[:3]
 
 
@@ -43,7 +43,7 @@ class CascadedPController:
         self.targetVelocity = None
         self.targetAcceleration = None
         self.positionP = np.array([1, 1, 1])
-        self.velocityP = np.array([1, 1, 1])
+        self.velocityP = np.array([5, 5, 5])
 
     @abstractmethod
     def computeCorrectiveVelocity(self, odom):
@@ -61,6 +61,7 @@ class CascadedPController:
         """
         pass
 
+    @abstractmethod
     def computeCorrectiveAcceleration(self, odom, correctiveVelocity):
         """ 
         Computes a corrective acceleration.
@@ -75,15 +76,7 @@ class CascadedPController:
         np.array: 3 dimensional vector representing corrective body-frame acceleration.
     
         """
-        targetVelocity = self.targetVelocity
-
-        if targetVelocity is not None:            
-            currectiveVelocity = msgToNumpy(odom.twist.twist.linear) # will we need to funcitons for linear and angular so it knows what to get from odom msg
-            outputAccel = ((targetVelocity + correctiveVelocity) - currentVelocity) * self.velocityP
-            return outputAccel
-            # TODO: Make function          
-        else:
-            return np.zeros(3)
+        pass
 
     def setTargetPosition(self, targetPosition):
         """ 
@@ -96,10 +89,10 @@ class CascadedPController:
 
         """
 
-        if isinstance(targetPosition, Vector3):
-            targetPosition = msgToNumpy(targetPosition)
-        self.targetPosition = targetPosition
-        self.targetVelocity = None
+        self.targetPosition = msgToNumpy(targetPosition)
+        # Zeros here because we want velocity correction to 
+        # still happen but don't want it to hold a velocity
+        self.targetVelocity = np.zeros(3)
         self.targetAcceleration = None
 
     def setTargetVelocity(self, targetVelocity):
@@ -113,10 +106,8 @@ class CascadedPController:
 
         """
 
-        if isinstance(targetVelocity, Vector3):
-            targetVelocity = msgToNumpy(targetVelocity)
         self.targetPosition = None
-        self.targetVelocity = targetVelocity
+        self.targetVelocity = msgToNumpy(targetVelocity)
         self.targetAcceleration = None
     
     def disable(self, msg=None):
@@ -163,13 +154,20 @@ class LinearCascadedPController(CascadedPController):
 
     def computeCorrectiveVelocity(self, odom):
 
-        targetPosition = self.targetPosition # [0 0 1]
-
-        if targetPosition is not None:
+        if self.targetPosition is not None:
             currentPosition = msgToNumpy(odom.pose.pose.position) # [1 0 0]
-            outputVel = (targetPosition - currentPosition) * self.velocityP # [-1 0 1]
+            outputVel = (self.targetPosition - currentPosition) * self.positionP # [-1 0 1]
             orientation = msgToNumpy(odom.pose.pose.orientation)
             return worldToBody(orientation, outputVel)   
+        else:
+            return np.zeros(3)
+
+    def computeCorrectiveAcceleration(self, odom, correctiveVelocity):
+
+        if self.targetVelocity is not None:            
+            currentVelocity = msgToNumpy(odom.twist.twist.linear)
+            outputAccel = ((self.targetVelocity + correctiveVelocity) - currentVelocity) * self.velocityP
+            return outputAccel       
         else:
             return np.zeros(3)
 
@@ -179,27 +177,38 @@ class AngularCascadedPController(CascadedPController):
         super(AngularCascadedPController, self).__init__()
 
     def computeCorrectiveVelocity(self, odom):
-        targetPosition = self.targetPosition
 
-        if targetPosition is not None:
-            currentPosition = msgToNumpy(odom.pose.pose.orientation)
-            outputVel = (targetPosition - currentPosition)
-            outputVel = quaternion_multiply(quaternion_inverse(currentPosition), outputVel)[:3] * self.velocityP
+        if self.targetPosition is not None:
+            currentOrientation = msgToNumpy(odom.pose.pose.orientation)
+
+            # Below code only works for small angles so lets find an orientation in the right direction but with a small angle
+            intermediateOrientation = quaternion_slerp(currentOrientation, self.targetPosition, 0.01)
+            dq = (intermediateOrientation - currentOrientation)
+            outputVel = quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3] * self.positionP
             return outputVel        
+        else:
+            return np.zeros(3)
+
+    def computeCorrectiveAcceleration(self, odom, correctiveVelocity):
+
+        if self.targetVelocity is not None:            
+            currentVelocity = msgToNumpy(odom.twist.twist.angular)
+            outputAccel = ((self.targetVelocity + correctiveVelocity) - currentVelocity) * self.velocityP
+            return outputAccel       
         else:
             return np.zeros(3)
 
 class AccelerationCalculator:
     def __init__(self, config):
-        self.mass = config["mass"]
-        self.com = config["com"]
-        self.inertia = config["inertia"]
-        self.linearDrag = config["linear_damping"]
-        self.quadraticDrag = config["quadratic_damping"]
-        self.volume = config["volume"]
-        self.cob = config["cob"]
-        self.gravity = 9.81
-        self.density = 997
+        self.mass = np.array(config["mass"])
+        self.com = np.array(config["com"])
+        self.inertia = np.array(config["inertia"])
+        self.linearDrag = np.array(config["linear_damping"])
+        self.quadraticDrag = np.array(config["quadratic_damping"])
+        self.volume = np.array(config["volume"])
+        self.cob = np.array(config["cob"])
+        self.gravity = 9.8
+        self.density = 1000
 
     def accelToNetForce(self, odom, linearAccel, angularAccel):
         """ 
@@ -218,28 +227,21 @@ class AccelerationCalculator:
 
         """
 
-        # Linear Velocities
-        linearVelo = [
-            odom.twist.twist.linear.x,
-            odom.twist.twist.linear.y,
-            odom.twist.twist.linear.z
-        ]
-        # Angular Velocities
-        angularVelo = [
-            odom.twist.twist.angular.x,
-            odom.twist.twist.angular.y,
-            odom.twist.twist.angular.z
-        ]
+        linearVelo = msgToNumpy(odom.twist.twist.linear)
+        angularVelo = msgToNumpy(odom.twist.twist.angular)
+        orientation = msgToNumpy(odom.pose.pose.orientation)
+
         # Force & Torque Initialization
         netForce = linearAccel * self.mass
         netTorque = angularAccel * self.inertia
+        
         # Forces and Torques Calculation
-        bodyFrameBuoyancy = worldToBody(odom.pose.pose.orientation, np.array([0, 0, self.volume * self.gravity * self.density]))
+        bodyFrameBuoyancy = worldToBody(orientation, np.array([0, 0, self.volume * self.gravity * self.density]))
         buoyancyTorque = np.cross((self.cob-self.com), bodyFrameBuoyancy)
-        precessionTorque = self.inertia * angularAccel + np.cross(angularVelo, (self.inertia * angularVelo))
+        precessionTorque = -np.cross(angularVelo, (self.inertia * angularVelo))
         dragForce = self.linearDrag[:3] * linearVelo + self.quadraticDrag[:3] * abs(linearVelo) * linearVelo
         dragTorque = self.linearDrag[3:] * angularVelo + self.quadraticDrag[3:] * abs(angularVelo) * angularVelo
-        gravityForce = worldToBody(odom.pose.pose.orientation, np.array([0, 0, - self.gravity * self.mass])) 
+        gravityForce = worldToBody(orientation, np.array([0, 0, - self.gravity * self.mass])) 
         # Net Calculation
         netForce = netForce - bodyFrameBuoyancy - dragForce - gravityForce
         netTorque = netTorque - buoyancyTorque - precessionTorque - dragTorque
@@ -258,6 +260,8 @@ class ControllerNode:
         self.linearController = LinearCascadedPController()
         self.angularController = AngularCascadedPController()
         self.accelerationCalculator = AccelerationCalculator(config)
+
+        self.angularController.positionP = np.array([100, 100, 100])
 
         rospy.Subscriber("odometry/filtered", Odometry, self.updateState)
         rospy.Subscriber("orientation", Quaternion, self.angularController.setTargetPosition)
