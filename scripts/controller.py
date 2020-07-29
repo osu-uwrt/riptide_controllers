@@ -122,7 +122,7 @@ class CascadedPController:
         self.targetVelocity = None
         self.targetAcceleration = None
 
-    def update(self, odom):
+    def update(self, odom, maxVelocity, maxAcceleration):
         """ 
         Updates the controller
     
@@ -140,12 +140,18 @@ class CascadedPController:
 
         if self.targetPosition is not None or self.targetVelocity is not None:
             correctiveVelocity = self.computeCorrectiveVelocity(odom)
+            magnitude = np.linalg.norm(correctiveVelocity)  
+            if magnitude > maxVelocity
+                correctiveVelocity = correctiveVelocity * (maxVelocity / magnitue)        
             netAccel += self.computeCorrectiveAcceleration(odom, correctiveVelocity)
 
         if self.targetAcceleration is not None:
             netAccel += self.targetAcceleration
+            magnitude = np.linalg.norm(netAccel)
+            if magnitude > maxAcceleration
+                netAccel = correctAccel * (maxAcceleration / magnitude)  
 
-        return netAccel
+        return min(netAccel, maxAcceleration)
 
 class LinearCascadedPController(CascadedPController):
 
@@ -158,7 +164,7 @@ class LinearCascadedPController(CascadedPController):
             currentPosition = msgToNumpy(odom.pose.pose.position) # [1 0 0]
             outputVel = (self.targetPosition - currentPosition) * self.positionP # [-1 0 1]
             orientation = msgToNumpy(odom.pose.pose.orientation)
-            return worldToBody(orientation, outputVel)   
+            return worldToBody(orientation, outputVel)
         else:
             return np.zeros(3)
 
@@ -262,6 +268,11 @@ class ControllerNode:
         self.accelerationCalculator = AccelerationCalculator(config)
 
         self.angularController.positionP = np.array([100, 100, 100])
+
+        self.maxLinearVelocity = config["maximum_linear_velocity"]
+        self.maxLinearAcceleration = config["maximum_linear_acceleration"]
+        self.maxAngularVelocity = config["maximum_angluar_velocity"]
+        self.maxAngularAcceleration = config["maximum_angluar_acceleration"]
 
         rospy.Subscriber("odometry/filtered", Odometry, self.updateState)
         rospy.Subscriber("orientation", Quaternion, self.angularController.setTargetPosition)
