@@ -141,14 +141,14 @@ class CascadedPController:
         if self.targetPosition is not None or self.targetVelocity is not None:
             correctiveVelocity = self.computeCorrectiveVelocity(odom)
             magnitude = np.linalg.norm(correctiveVelocity)  
-            if magnitude > maxVelocity
+            if magnitude >  maxVelocity:
                 correctiveVelocity = correctiveVelocity * (maxVelocity / magnitue)        
             netAccel += self.computeCorrectiveAcceleration(odom, correctiveVelocity)
 
         if self.targetAcceleration is not None:
             netAccel += self.targetAcceleration
             magnitude = np.linalg.norm(netAccel)
-            if magnitude > maxAcceleration
+            if magnitude > maxAcceleration:
                 netAccel = correctAccel * (maxAcceleration / magnitude)  
 
         return min(netAccel, maxAcceleration)
@@ -271,8 +271,8 @@ class ControllerNode:
 
         self.maxLinearVelocity = config["maximum_linear_velocity"]
         self.maxLinearAcceleration = config["maximum_linear_acceleration"]
-        self.maxAngularVelocity = config["maximum_angluar_velocity"]
-        self.maxAngularAcceleration = config["maximum_angluar_acceleration"]
+        self.maxAngularVelocity = config["maximum_angular_velocity"]
+        self.maxAngularAcceleration = config["maximum_angular_acceleration"]
 
         rospy.Subscriber("odometry/filtered", Odometry, self.updateState)
         rospy.Subscriber("orientation", Quaternion, self.angularController.setTargetPosition)
