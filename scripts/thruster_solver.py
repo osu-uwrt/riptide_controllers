@@ -38,6 +38,8 @@ class ThrusterSolverNode:
             self.thruster_coeffs[i, :3] = body_force
             self.thruster_coeffs[i, 3:] = body_torque
 
+            
+
         self.initial_condition = []
         self.bounds = []
         for i in range(len(thruster_info)):
