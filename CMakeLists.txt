@@ -35,6 +35,7 @@ generate_dynamic_reconfigure_options(
   cfg/AttitudeController.cfg
   cfg/LinearController.cfg
   cfg/AlignmentController.cfg
+  cfg/NewController.cfg
 )
 
 add_action_files(

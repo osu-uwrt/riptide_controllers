@@ -8,6 +8,8 @@ from tf.transformations import quaternion_multiply, quaternion_inverse, quaterni
 import numpy as np
 from abc import ABCMeta, abstractmethod
 import yaml
+from dynamic_reconfigure.server import Server
+from riptide_controllers.cfg import NewControllerConfig
 
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
@@ -306,6 +308,14 @@ class ControllerNode:
             self.forcePub.publish(Twist(Vector3(*netForce), Vector3(*netTorque)))
             self.lastForce = netForce
             self.lastTorque = netTorque
+    
+    def dynamicReconfigureCb(self, config, level):
+        self.linearController.positionP =  config["linear_position_p"]
+        self.linearController.velocityP =  config["linear_velocity_p"]
+        self.angularController.positionP =  config["angular_position_p"]
+        self.angularController.velocityP =  config["angular_velocity_p"]
+
+        return config
 
     def turnOff(self, msg=None):
         self.angularController.disable()
@@ -316,4 +326,5 @@ class ControllerNode:
 if __name__ == '__main__':
     rospy.init_node("controller")
     controller = ControllerNode()
+    Server(NewControllerConfig, controller.dynamicReconfigureCb)
     rospy.spin()
