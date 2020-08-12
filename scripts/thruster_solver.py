@@ -1,23 +1,29 @@
 #!/usr/bin/env python
 
 import rospy
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, Quaternion, Vector3, Transform, Point32
 from std_msgs.msg import Float32MultiArray
+from sensor_msgs.msg import PointCloud
 import numpy as np
 import yaml
-from tf.transformations import euler_matrix
+from tf.transformations import euler_matrix, projection_from_matrix, projection_matrix, is_same_transform
+from tf import Transformer, TransformerROS
 from math import pi
 from scipy.optimize import minimize
 
 
 def msg_to_numpy(msg):
+    if hasattr(msg, "w"):
+        return np.array([msg.x, msg.y, msg.z, msg.w])
     return np.array([msg.x, msg.y, msg.z])
-
 
 class ThrusterSolverNode:
 
     def __init__(self):
         rospy.Subscriber("net_force", Twist, self.force_cb)
+        rospy.Subscriber("orientation", Quaternion, self.orientation_cb)                
+        rospy.Subscriber("position", Vector3, self.position_cb)
+
         self.thruster_pub = rospy.Publisher("thruster_forces", Float32MultiArray, queue_size=5)
 
         config_path = rospy.get_param("~vehicle_config")
@@ -29,6 +35,9 @@ class ThrusterSolverNode:
         com = np.array(config_file["com"])
         self.max_force = config_file["thruster"]["max_force"]
 
+        self.point_cloud = PointCloud()
+        self.max_thruster_height = 0 # level of water (may need to change)
+
         for i, thruster in enumerate(thruster_info):
             pose = np.array(thruster["pose"])
             rot_mat = euler_matrix(*pose[3:])
@@ -36,9 +45,13 @@ class ThrusterSolverNode:
             body_torque = np.cross(pose[:3]- com, body_force)
 
             self.thruster_coeffs[i, :3] = body_force
-            self.thruster_coeffs[i, 3:] = body_torque
-
+            self.thruster_coeffs[i, 3:] = body_torque 
             
+            point = Point32()
+            point.x = pose[0] 
+            point.y = pose[1]    
+            point.z = pose[2]               
+            self.point_cloud.points.append(point)                    
 
         self.initial_condition = []
         self.bounds = []
@@ -49,6 +62,36 @@ class ThrusterSolverNode:
         self.bounds = tuple(self.bounds)
 
         self.power_priority = 0.001
+
+        self.position = np.array([0, 0, 0])
+        self.orientation = np.array([0, 0, 0, 1])
+        self.t = tf.Transformer(True)      
+        m = geometry_msgs.msg.TransformStamped()
+        m.header.frame_id = 'FRAME'
+        m.child_frame_id = 'CHILD'
+        m.transform = self.update_transform(self.position, self.orientation)
+        self.t.setTransform(m)                
+    
+    # uses params position = [x,y,z] & orientation = [x,y,z,w] to return a new Transform msg
+    def update_transform(self, position, orientation):
+        ans = Transform()
+        ans.translation.x = position.x
+        ans.translation.y = position.y
+        ans.translation.z = position.z
+
+        ans.rotation.x = orientation.x
+        ans.rotation.y = orientation.y
+        ans.rotation.z = orientation.z
+        ans.rotation.w = orientation.w
+
+    # takes array of thruster forces and returns the array with each thruster above the water set to zero
+    def stop_thrusters_above_water(self, thrusters):
+        current_cloud = self.transformPointCloud("FRAME", self.point_cloud)
+        points = current_cloud.points
+        for i in range(len(points)):
+            if points[i].z > self.max_thruster_height
+            thrusters[i] = [0, 0, 0]
+        return thrusters
 
     # Cost function forcing the thruster to output desired net force
     def force_cost(self, thruster_forces, desired_state):
@@ -77,7 +120,21 @@ class ThrusterSolverNode:
         total_cost_jac += self.power_cost_jac(thruster_forces) * self.power_priority
         return total_cost_jac
 
+    def position_cb(self, msg):
+        return
+    def orientation_cb(self, msg):
+        return
+
     def force_cb(self, msg):
+        point = np.random.random(3) - 0.5
+        normal = np.random.random(3) - 0.5
+        direct = np.random.random(3) - 0.5
+        persp = np.random.random(3) - 0.5
+        P0 = projection_matrix(point, normal)
+        result = projection_from_matrix(P0)
+        P1 = projection_matrix(*result)
+        is_same_transform(P0, P1)
+
         desired_state = np.zeros(6)
         desired_state[:3] = msg_to_numpy(msg.linear)
         desired_state[3:] = msg_to_numpy(msg.angular)
@@ -90,6 +147,9 @@ class ThrusterSolverNode:
 
         msg = Float32MultiArray()
         msg.data = res.x
+
+        msg.data = self.stop_thrusters_above_water(msg.data)        
+
         self.thruster_pub.publish(msg)
 
 
