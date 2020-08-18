@@ -217,7 +217,7 @@ class AccelerationCalculator:
         self.cob = np.array(config["cob"])
         self.gravity = 9.8
         self.density = 1000
-        self.buoyancy = np.array([0, 0, self.volume * self.gravity * self.density]
+        self.buoyancy = np.array([0, 0, self.volume * self.gravity * self.density])
 
     def accelToNetForce(self, odom, linearAccel, angularAccel):
         """ 
