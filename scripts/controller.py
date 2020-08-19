@@ -217,7 +217,7 @@ class AccelerationCalculator:
         self.cob = np.array(config["cob"])
         self.gravity = 9.8
         self.density = 1000
-        self.buoyancy = np.array([0, 0, self.volume * self.gravity * self.density]
+        self.buoyancy = np.array([0, 0, self.volume * self.gravity * self.density])
 
     def accelToNetForce(self, odom, linearAccel, angularAccel):
         """ 
@@ -313,20 +313,20 @@ class ControllerNode:
             self.lastTorque = netTorque
     
     def dynamicReconfigureCb(self, config, level):
-        self.linearController.positionP = config["p_values"]["linear_position_p"]
-        self.linearController.velocityP = config["p_values"]["linear_velocity_p"]
-        self.angularController.positionP = config["p_values"]["angular_position_p"]
-        self.angularController.velocityP = config["p_values"]["angular_velocity_p"]
+        self.linearController.positionP = config["linear_position_p"]
+        self.linearController.velocityP = config["linear_velocity_p"]
+        self.angularController.positionP = config["angular_position_p"]
+        self.angularController.velocityP = config["angular_velocity_p"]
 
-        self.accelerationCalculator.linearDrag[0] = config["linear_drag"]["x"]    
-        self.accelerationCalculator.linearDrag[1] = config["linear_drag"]["y"] 
-        self.accelerationCalculator.linearDrag[2] = config["linear_drag"]["z"]
+        self.accelerationCalculator.linearDrag[0] = config["linear_x"]    
+        self.accelerationCalculator.linearDrag[1] = config["linear_y"] 
+        self.accelerationCalculator.linearDrag[2] = config["linear_z"]
 
-        self.accelerationCalculator.quadraticDrag[0] = config["quadratic_drag"]["x"]    
-        self.accelerationCalculator.quadraticDrag[1] = config["quadratic_drag"]["y"] 
-        self.accelerationCalculator.quadraticDrag[2] = config["quadratic_drag"]["z"] 
+        self.accelerationCalculator.quadraticDrag[0] = config["quadratic_x"]    
+        self.accelerationCalculator.quadraticDrag[1] = config["quadratic_y"] 
+        self.accelerationCalculator.quadraticDrag[2] = config["quadratic_z"] 
 
-        self.accelerationCalculator.buoyance = config["buoyancy"]["force"] 
+        self.accelerationCalculator.buoyance = config["force"] 
 
         return config
 

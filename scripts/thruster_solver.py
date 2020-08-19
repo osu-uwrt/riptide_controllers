@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 import rospy
-from geometry_msgs.msg import Twist, Quaternion, Vector3, Transform, Point32
+from geometry_msgs.msg import Twist, Quaternion, Vector3, TransformStamped, Point32
 from std_msgs.msg import Float32MultiArray
 from sensor_msgs.msg import PointCloud
 import numpy as np
 import yaml
-from tf.transformations import euler_matrix, projection_from_matrix, projection_matrix, is_same_transform
-from tf import Transformer, TransformerROS
+from tf.transformations import euler_matrix, projection_from_matrix, projection_matrix, is_same_transform, quaternion_from_euler
+from tf import TransformerROS, TransformBroadcaster
 from math import pi
 from scipy.optimize import minimize
 
@@ -35,7 +35,7 @@ class ThrusterSolverNode:
         com = np.array(config_file["com"])
         self.max_force = config_file["thruster"]["max_force"]
 
-        self.point_cloud = PointCloud()
+        self.point_cloud = PointCloud()        
         self.max_thruster_height = 0 # level of water (may need to change)
 
         for i, thruster in enumerate(thruster_info):
@@ -65,32 +65,51 @@ class ThrusterSolverNode:
 
         self.position = np.array([0, 0, 0])
         self.orientation = np.array([0, 0, 0, 1])
-        self.t = tf.Transformer(True)      
-        m = geometry_msgs.msg.TransformStamped()
-        m.header.frame_id = 'FRAME'
-        m.child_frame_id = 'CHILD'
-        m.transform = self.update_transform(self.position, self.orientation)
-        self.t.setTransform(m)                
-    
-    # uses params position = [x,y,z] & orientation = [x,y,z,w] to return a new Transform msg
-    def update_transform(self, position, orientation):
-        ans = Transform()
-        ans.translation.x = position.x
-        ans.translation.y = position.y
-        ans.translation.z = position.z
+        self.t = TransformerROS(True)
 
-        ans.rotation.x = orientation.x
-        ans.rotation.y = orientation.y
-        ans.rotation.z = orientation.z
-        ans.rotation.w = orientation.w
+        # br = TransformBroadcaster()
+        # br.sendTransform((0, 0, 0),
+        #              quaternion_from_euler(0, 0, 0),
+        #              rospy.Time.now(),
+        #              "robot",
+        #              "world")
+
+        # broadcaster = TransformBroadcaster()
+
+        # m = TransformStamped()
+        # m.header.frame_id = "world"
+        # m.child_frame_id = "robot"
+        # m = self.update_transform_stamped(m, self.position, self.orientation)        
+        # broadcaster.sendTransformMessage(m)  
+
+        # m = TransformStamped()
+        # m.header.frame_id = "WORLD_FRAME"
+        # m.child_frame_id = "WORLD_CHILD"
+        # m = self.update_transform_stamped(m, [0,0,0], [0,0,0,1])                     
+        # self.point_cloud.header.frame_id = m.header.frame_id 
+        # broadcaster.sendTransformMessage(m)
+
+    
+    # uses params transform = TranformStamped() position = [x,y,z] & orientation = [x,y,z,w] to return an updated TransformStamped msg
+    def update_transform_stamped(self, transform_stamped, position, orientation):        
+        transform_stamped.transform.translation.x = position[0]
+        transform_stamped.transform.translation.y = position[1]
+        transform_stamped.transform.translation.z = position[2]
+
+        transform_stamped.transform.rotation.x = orientation[0]
+        transform_stamped.transform.rotation.y = orientation[1]
+        transform_stamped.transform.rotation.z = orientation[2]
+        transform_stamped.transform.rotation.w = orientation[3]
+
+        return transform_stamped
 
     # takes array of thruster forces and returns the array with each thruster above the water set to zero
     def stop_thrusters_above_water(self, thrusters):
-        current_cloud = self.transformPointCloud("FRAME", self.point_cloud)
+        current_cloud = self.t.transformPointCloud("ROBOT_FRAME", self.point_cloud)
         points = current_cloud.points
         for i in range(len(points)):
-            if points[i].z > self.max_thruster_height
-            thrusters[i] = [0, 0, 0]
+            if points[i].z > self.max_thruster_height:
+                thrusters[i] = [0, 0, 0]
         return thrusters
 
     # Cost function forcing the thruster to output desired net force
@@ -148,7 +167,14 @@ class ThrusterSolverNode:
         msg = Float32MultiArray()
         msg.data = res.x
 
-        msg.data = self.stop_thrusters_above_water(msg.data)        
+        # msg.data = self.stop_thrusters_above_water(msg.data)        
+
+        br = TransformBroadcaster()
+        br.sendTransform((0, 0, 0),
+        quaternion_from_euler(0, 0, 0),
+        rospy.Time.now(),
+        "robot",
+        "world")
 
         self.thruster_pub.publish(msg)
 
