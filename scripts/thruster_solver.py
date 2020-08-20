@@ -7,7 +7,7 @@ from sensor_msgs.msg import PointCloud
 import numpy as np
 import yaml
 from tf.transformations import euler_matrix, projection_from_matrix, projection_matrix, is_same_transform, quaternion_from_euler
-from tf import TransformerROS, TransformBroadcaster
+from tf import TransformerROS, TransformListener
 from math import pi
 from scipy.optimize import minimize
 
@@ -21,8 +21,6 @@ class ThrusterSolverNode:
 
     def __init__(self):
         rospy.Subscriber("net_force", Twist, self.force_cb)
-        rospy.Subscriber("orientation", Quaternion, self.orientation_cb)                
-        rospy.Subscriber("position", Vector3, self.position_cb)
 
         self.thruster_pub = rospy.Publisher("thruster_forces", Float32MultiArray, queue_size=5)
 
@@ -45,13 +43,7 @@ class ThrusterSolverNode:
             body_torque = np.cross(pose[:3]- com, body_force)
 
             self.thruster_coeffs[i, :3] = body_force
-            self.thruster_coeffs[i, 3:] = body_torque 
-            
-            point = Point32()
-            point.x = pose[0] 
-            point.y = pose[1]    
-            point.z = pose[2]               
-            self.point_cloud.points.append(point)                    
+            self.thruster_coeffs[i, 3:] = body_torque                   
 
         self.initial_condition = []
         self.bounds = []
@@ -63,63 +55,29 @@ class ThrusterSolverNode:
 
         self.power_priority = 0.001
 
-        self.position = np.array([0, 0, 0])
-        self.orientation = np.array([0, 0, 0, 1])
-        self.t = TransformerROS(True)
+        self.timer = rospy.Timer(rospy.Duration(0.1), self.check_thrusters)
+        self.listener = TransformListener()
 
-        # br = TransformBroadcaster()
-        # br.sendTransform((0, 0, 0),
-        #              quaternion_from_euler(0, 0, 0),
-        #              rospy.Time.now(),
-        #              "robot",
-        #              "world")
+        self.WATER_LEVEL = 0
 
-        # broadcaster = TransformBroadcaster()
-
-        # m = TransformStamped()
-        # m.header.frame_id = "world"
-        # m.child_frame_id = "robot"
-        # m = self.update_transform_stamped(m, self.position, self.orientation)        
-        # broadcaster.sendTransformMessage(m)  
-
-        # m = TransformStamped()
-        # m.header.frame_id = "WORLD_FRAME"
-        # m.child_frame_id = "WORLD_CHILD"
-        # m = self.update_transform_stamped(m, [0,0,0], [0,0,0,1])                     
-        # self.point_cloud.header.frame_id = m.header.frame_id 
-        # broadcaster.sendTransformMessage(m)
-
-    
-    # uses params transform = TranformStamped() position = [x,y,z] & orientation = [x,y,z,w] to return an updated TransformStamped msg
-    def update_transform_stamped(self, transform_stamped, position, orientation):        
-        transform_stamped.transform.translation.x = position[0]
-        transform_stamped.transform.translation.y = position[1]
-        transform_stamped.transform.translation.z = position[2]
-
-        transform_stamped.transform.rotation.x = orientation[0]
-        transform_stamped.transform.rotation.y = orientation[1]
-        transform_stamped.transform.rotation.z = orientation[2]
-        transform_stamped.transform.rotation.w = orientation[3]
-
-        return transform_stamped
+        self.current_thruster_coeffs = self.thruster_coeffs
 
     # takes array of thruster forces and returns the array with each thruster above the water set to zero
-    def stop_thrusters_above_water(self, thrusters):
-        current_cloud = self.t.transformPointCloud("ROBOT_FRAME", self.point_cloud)
-        points = current_cloud.points
-        for i in range(len(points)):
-            if points[i].z > self.max_thruster_height:
-                thrusters[i] = [0, 0, 0]
-        return thrusters
+    def check_thrusters(self):
+        self.current_thruster_coeffs = self.thruster_coeffs
+        for i in self.thruster_coeffs.shape[1]:
+            trans = self.listener.lookupTransform("/world", "thruster_" + str(i), rospy.Time(0))      
+            if trans[2] > self.WATER_LEVEL:   
+                self.current_thruster_coeffs[:, i] = 0
 
     # Cost function forcing the thruster to output desired net force
     def force_cost(self, thruster_forces, desired_state):
-        residual = np.dot(self.thruster_coeffs.T, thruster_forces) - desired_state
+        residual = np.dot(self.current_thruster_coeffs.T, thruster_forces) - desired_state
         return np.sum(residual ** 2)
     
     def force_cost_jac(self, thruster_forces, desired_state):
-        residual = np.dot(self.thruster_coeffs.T, thruster_forces) - desired_state
-        return np.dot(self.thruster_coeffs, 2 * residual)
+        residual = np.dot(self.current_thruster_coeffs.T, thruster_forces) - desired_state
+        return np.dot(self.current_thruster_coeffs, 2 * residual)
 
     # Cost function forcing thrusters to find a solution that is low-power
     def power_cost(self, thruster_forces):
@@ -139,21 +97,7 @@ class ThrusterSolverNode:
         total_cost_jac += self.power_cost_jac(thruster_forces) * self.power_priority
         return total_cost_jac
 
-    def position_cb(self, msg):
-        return
-    def orientation_cb(self, msg):
-        return
-
     def force_cb(self, msg):
-        point = np.random.random(3) - 0.5
-        normal = np.random.random(3) - 0.5
-        direct = np.random.random(3) - 0.5
-        persp = np.random.random(3) - 0.5
-        P0 = projection_matrix(point, normal)
-        result = projection_from_matrix(P0)
-        P1 = projection_matrix(*result)
-        is_same_transform(P0, P1)
-
         desired_state = np.zeros(6)
         desired_state[:3] = msg_to_numpy(msg.linear)
         desired_state[3:] = msg_to_numpy(msg.angular)
@@ -165,16 +109,7 @@ class ThrusterSolverNode:
             rospy.logwarn("Unable to exert requested force")
 
         msg = Float32MultiArray()
-        msg.data = res.x
-
-        # msg.data = self.stop_thrusters_above_water(msg.data)        
-
-        br = TransformBroadcaster()
-        br.sendTransform((0, 0, 0),
-        quaternion_from_euler(0, 0, 0),
-        rospy.Time.now(),
-        "robot",
-        "world")
+        msg.data = res.x        
 
         self.thruster_pub.publish(msg)
 
