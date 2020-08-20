@@ -1,14 +1,12 @@
 #!/usr/bin/env python
 
 import rospy
-from geometry_msgs.msg import Twist, Quaternion, Vector3, TransformStamped, Point32
+from geometry_msgs.msg import Twist
 from std_msgs.msg import Float32MultiArray
-from sensor_msgs.msg import PointCloud
 import numpy as np
 import yaml
-from tf.transformations import euler_matrix, projection_from_matrix, projection_matrix, is_same_transform, quaternion_from_euler
-from tf import TransformerROS, TransformListener
-from math import pi
+from tf.transformations import euler_matrix
+from tf import TransformListener
 from scipy.optimize import minimize
 
 
@@ -32,9 +30,6 @@ class ThrusterSolverNode:
         self.thruster_coeffs = np.zeros((len(thruster_info), 6))
         com = np.array(config_file["com"])
         self.max_force = config_file["thruster"]["max_force"]
-
-        self.point_cloud = PointCloud()        
-        self.max_thruster_height = 0 # level of water (may need to change)
 
         for i, thruster in enumerate(thruster_info):
             pose = np.array(thruster["pose"])
@@ -60,15 +55,18 @@ class ThrusterSolverNode:
 
         self.WATER_LEVEL = 0
 
-        self.current_thruster_coeffs = self.thruster_coeffs
+        self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
 
     # takes array of thruster forces and returns the array with each thruster above the water set to zero
-    def check_thrusters(self):
-        self.current_thruster_coeffs = self.thruster_coeffs
-        for i in self.thruster_coeffs.shape[1]:
-            trans = self.listener.lookupTransform("/world", "thruster_" + str(i), rospy.Time(0))      
-            if trans[2] > self.WATER_LEVEL:   
-                self.current_thruster_coeffs[:, i] = 0
+    def check_thrusters(self, timer_event):
+        try:
+            self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
+            for i in range(self.thruster_coeffs.shape[0]):
+                trans, _ = self.listener.lookupTransform("/world", "/puddles/thruster_" + str(i), rospy.Time(0))      
+                if trans[2] > self.WATER_LEVEL:   
+                    self.current_thruster_coeffs[i, :] = 0
+        except Exception as ex:
+            rospy.logerr(str(ex))
 
     # Cost function forcing the thruster to output desired net force
     def force_cost(self, thruster_forces, desired_state):

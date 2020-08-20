@@ -46,6 +46,8 @@ class CascadedPController:
         self.targetAcceleration = None
         self.positionP = np.array([1, 1, 1])
         self.velocityP = np.array([5, 5, 5])
+        self.maxVelocity = np.array([1, .7, .8])
+        self.maxAccel = np.array([1, .7, .8])
 
     @abstractmethod
     def computeCorrectiveVelocity(self, odom):
@@ -124,7 +126,7 @@ class CascadedPController:
         self.targetVelocity = None
         self.targetAcceleration = None
 
-    def update(self, odom, maxVelocity, maxAcceleration):
+    def update(self, odom):
         """ 
         Updates the controller
     
@@ -142,18 +144,19 @@ class CascadedPController:
 
         if self.targetPosition is not None or self.targetVelocity is not None:
             correctiveVelocity = self.computeCorrectiveVelocity(odom)
-            magnitude = np.linalg.norm(correctiveVelocity)  
-            if magnitude >  maxVelocity:
-                correctiveVelocity = correctiveVelocity * (maxVelocity / magnitue)        
+            for i in range(3):
+                if abs(correctiveVelocity[i]) > self.maxVelocity[i]:
+                    correctiveVelocity[i] = self.maxVelocity[i] * correctiveVelocity[i] / abs(correctiveVelocity[i])
             netAccel += self.computeCorrectiveAcceleration(odom, correctiveVelocity)
 
         if self.targetAcceleration is not None:
             netAccel += self.targetAcceleration
-            magnitude = np.linalg.norm(netAccel)
-            if magnitude > maxAcceleration:
-                netAccel = correctAccel * (maxAcceleration / magnitude)  
 
-        return min(netAccel, maxAcceleration)
+        for i in range(3):
+            if abs(netAccel[i]) > self.maxAccel[i]:
+                netAccel[i] = self.maxAccel[i] * netAccel[i] / abs(netAccel[i])
+
+        return netAccel
 
 class LinearCascadedPController(CascadedPController):
 
