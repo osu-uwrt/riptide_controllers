@@ -226,7 +226,7 @@ class AccelerationCalculator:
         """ 
         Converts vehicle acceleration into required net force.
     
-        Will take the required acceleration and consider mass, buoyance, drag, and precession to compute the required net force.
+        Will take the required acceleration and consider mass, buoyancy, drag, and precession to compute the required net force.
     
         Parameters:
         odom (Odometry): The latest odometry message.
@@ -329,7 +329,7 @@ class ControllerNode:
         self.accelerationCalculator.quadraticDrag[1] = config["quadratic_y"] 
         self.accelerationCalculator.quadraticDrag[2] = config["quadratic_z"] 
 
-        self.accelerationCalculator.buoyance = config["force"] 
+        self.accelerationCalculator.buoyancy = config["force"] 
 
         return config
 

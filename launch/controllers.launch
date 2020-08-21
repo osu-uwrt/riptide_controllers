@@ -1,4 +1,8 @@
 <launch>
-	<include file="$(find riptide_controllers)/launch/new_controller.launch" />
+	<arg name="robot" default="puddles" doc="Name of the vehicle" />
+
+	<include file="$(find riptide_controllers)/launch/new_controller.launch">
+		<arg name="robot" value="$(arg robot)" />
+	</include>
 	<include file="$(find riptide_controllers)/launch/actions.launch" />
 </launch>
