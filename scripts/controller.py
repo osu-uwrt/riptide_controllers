@@ -144,9 +144,6 @@ class CascadedPController:
 
         if self.targetPosition is not None or self.targetVelocity is not None:
             correctiveVelocity = self.computeCorrectiveVelocity(odom)
-            for i in range(3):
-                if abs(correctiveVelocity[i]) > self.maxVelocity[i]:
-                    correctiveVelocity[i] = self.maxVelocity[i] * correctiveVelocity[i] / abs(correctiveVelocity[i])
             netAccel += self.computeCorrectiveAcceleration(odom, correctiveVelocity)
 
         if self.targetAcceleration is not None:
@@ -175,9 +172,13 @@ class LinearCascadedPController(CascadedPController):
 
     def computeCorrectiveAcceleration(self, odom, correctiveVelocity):
 
-        if self.targetVelocity is not None:            
+        if self.targetVelocity is not None:          
+            targetVelocity = self.targetVelocity + correctiveVelocity
+            for i in range(3):
+                if abs(targetVelocity[i]) > self.maxVelocity[i]:
+                    targetVelocity[i] = self.maxVelocity[i] * targetVelocity[i] / abs(targetVelocity[i])  
             currentVelocity = msgToNumpy(odom.twist.twist.linear)
-            outputAccel = ((self.targetVelocity + correctiveVelocity) - currentVelocity) * self.velocityP
+            outputAccel = (targetVelocity - currentVelocity) * self.velocityP
             return outputAccel       
         else:
             return np.zeros(3)
@@ -202,9 +203,13 @@ class AngularCascadedPController(CascadedPController):
 
     def computeCorrectiveAcceleration(self, odom, correctiveVelocity):
 
-        if self.targetVelocity is not None:            
+        if self.targetVelocity is not None:   
+            targetVelocity = self.targetVelocity + correctiveVelocity
+            for i in range(3):
+                if abs(targetVelocity[i]) > self.maxVelocity[i]:
+                    targetVelocity[i] = self.maxVelocity[i] * targetVelocity[i] / abs(targetVelocity[i])           
             currentVelocity = msgToNumpy(odom.twist.twist.angular)
-            outputAccel = ((self.targetVelocity + correctiveVelocity) - currentVelocity) * self.velocityP
+            outputAccel = (targetVelocity - currentVelocity) * self.velocityP
             return outputAccel       
         else:
             return np.zeros(3)
@@ -329,7 +334,7 @@ class ControllerNode:
         self.accelerationCalculator.quadraticDrag[1] = config["quadratic_y"] 
         self.accelerationCalculator.quadraticDrag[2] = config["quadratic_z"] 
 
-        self.accelerationCalculator.buoyancy = config["force"] 
+        self.accelerationCalculator.buoyancy = np.array([0, 0, config["force"] ])
 
         return config
 
