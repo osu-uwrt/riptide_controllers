@@ -296,6 +296,7 @@ class ControllerNode:
         rospy.Subscriber("disable_linear", Empty, self.linearController.disable)
         rospy.Subscriber("off", Empty, self.turnOff)
         self.forcePub = rospy.Publisher("net_force", Twist, queue_size=5)
+        self.accelPub = rospy.Publisher("~requested_accel", Twist, queue_size=5)
 
         self.lastTorque = None
         self.lastForce = None
@@ -304,6 +305,8 @@ class ControllerNode:
     def updateState(self, odomMsg):
         linearAccel = self.linearController.update(odomMsg)
         angularAccel = self.angularController.update(odomMsg)
+
+        self.accelPub.publish(Twist(Vector3(*linearAccel), Vector3(*angularAccel)))
 
         if np.linalg.norm(linearAccel) > 0 or np.linalg.norm(angularAccel) > 0:
             self.off = False
