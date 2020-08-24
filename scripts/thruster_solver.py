@@ -21,6 +21,7 @@ class ThrusterSolverNode:
         rospy.Subscriber("net_force", Twist, self.force_cb)
 
         self.thruster_pub = rospy.Publisher("thruster_forces", Float32MultiArray, queue_size=5)
+        self.tf_namespace = rospy.get_param("~robot")
 
         config_path = rospy.get_param("~vehicle_config")
         with open(config_path, 'r') as stream:
@@ -62,8 +63,8 @@ class ThrusterSolverNode:
         try:
             self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
             for i in range(self.thruster_coeffs.shape[0]):
-                trans, _ = self.listener.lookupTransform("/world", "/puddles/thruster_" + str(i), rospy.Time(0))      
-                if trans[2] > self.WATER_LEVEL:   
+                trans, _ = self.listener.lookupTransform("/world", "/%s/thruster_%d" % (self.tf_namespace, i), rospy.Time(0))      
+                if trans[2] > self.WATER_LEVEL:
                     self.current_thruster_coeffs[i, :] = 0
         except Exception as ex:
             rospy.logerr(str(ex))

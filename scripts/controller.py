@@ -144,9 +144,6 @@ class CascadedPController:
 
         if self.targetPosition is not None or self.targetVelocity is not None:
             correctiveVelocity = self.computeCorrectiveVelocity(odom)
-            for i in range(3):
-                if abs(correctiveVelocity[i]) > self.maxVelocity[i]:
-                    correctiveVelocity[i] = self.maxVelocity[i] * correctiveVelocity[i] / abs(correctiveVelocity[i])
             netAccel += self.computeCorrectiveAcceleration(odom, correctiveVelocity)
 
         if self.targetAcceleration is not None:
@@ -175,9 +172,13 @@ class LinearCascadedPController(CascadedPController):
 
     def computeCorrectiveAcceleration(self, odom, correctiveVelocity):
 
-        if self.targetVelocity is not None:            
+        if self.targetVelocity is not None:          
+            targetVelocity = self.targetVelocity + correctiveVelocity
+            for i in range(3):
+                if abs(targetVelocity[i]) > self.maxVelocity[i]:
+                    targetVelocity[i] = self.maxVelocity[i] * targetVelocity[i] / abs(targetVelocity[i])  
             currentVelocity = msgToNumpy(odom.twist.twist.linear)
-            outputAccel = ((self.targetVelocity + correctiveVelocity) - currentVelocity) * self.velocityP
+            outputAccel = (targetVelocity - currentVelocity) * self.velocityP
             return outputAccel       
         else:
             return np.zeros(3)
@@ -202,9 +203,13 @@ class AngularCascadedPController(CascadedPController):
 
     def computeCorrectiveAcceleration(self, odom, correctiveVelocity):
 
-        if self.targetVelocity is not None:            
+        if self.targetVelocity is not None:   
+            targetVelocity = self.targetVelocity + correctiveVelocity
+            for i in range(3):
+                if abs(targetVelocity[i]) > self.maxVelocity[i]:
+                    targetVelocity[i] = self.maxVelocity[i] * targetVelocity[i] / abs(targetVelocity[i])           
             currentVelocity = msgToNumpy(odom.twist.twist.angular)
-            outputAccel = ((self.targetVelocity + correctiveVelocity) - currentVelocity) * self.velocityP
+            outputAccel = (targetVelocity - currentVelocity) * self.velocityP
             return outputAccel       
         else:
             return np.zeros(3)
@@ -226,7 +231,7 @@ class AccelerationCalculator:
         """ 
         Converts vehicle acceleration into required net force.
     
-        Will take the required acceleration and consider mass, buoyance, drag, and precession to compute the required net force.
+        Will take the required acceleration and consider mass, buoyancy, drag, and precession to compute the required net force.
     
         Parameters:
         odom (Odometry): The latest odometry message.
@@ -291,6 +296,7 @@ class ControllerNode:
         rospy.Subscriber("disable_linear", Empty, self.linearController.disable)
         rospy.Subscriber("off", Empty, self.turnOff)
         self.forcePub = rospy.Publisher("net_force", Twist, queue_size=5)
+        self.accelPub = rospy.Publisher("~requested_accel", Twist, queue_size=5)
 
         self.lastTorque = None
         self.lastForce = None
@@ -299,6 +305,8 @@ class ControllerNode:
     def updateState(self, odomMsg):
         linearAccel = self.linearController.update(odomMsg)
         angularAccel = self.angularController.update(odomMsg)
+
+        self.accelPub.publish(Twist(Vector3(*linearAccel), Vector3(*angularAccel)))
 
         if np.linalg.norm(linearAccel) > 0 or np.linalg.norm(angularAccel) > 0:
             self.off = False
@@ -343,8 +351,7 @@ class ControllerNode:
         self.angularController.maxAccel[1] = config['max_angular_accel_y']
         self.angularController.maxAccel[2] = config['max_angular_accel_z']
 
-
-        self.accelerationCalculator.buoyance = config["force"] 
+        self.accelerationCalculator.buoyancy = np.array([0, 0, config["force"] ])
 
         return config
 
