@@ -329,6 +329,21 @@ class ControllerNode:
         self.accelerationCalculator.quadraticDrag[1] = config["quadratic_y"] 
         self.accelerationCalculator.quadraticDrag[2] = config["quadratic_z"] 
 
+        self.linearController.maxVelocity[0] = config['max_linear_velocity_x']
+        self.linearController.maxVelocity[1] = config['max_linear_velocity_y']
+        self.linearController.maxVelocity[2] = config['max_linear_velocity_z']
+        self.linearController.maxAccel[0] = config['max_linear_accel_x']
+        self.linearController.maxAccel[1] = config['max_linear_accel_y']
+        self.linearController.maxAccel[2] = config['max_linear_accel_z']
+
+        self.angularController.maxVelocity[0] = config['max_angular_velocity_x']
+        self.angularController.maxVelocity[1] = config['max_angular_velocity_y']
+        self.angularController.maxVelocity[2] = config['max_angular_velocity_z']
+        self.angularController.maxAccel[0] = config['max_angular_accel_x']
+        self.angularController.maxAccel[1] = config['max_angular_accel_y']
+        self.angularController.maxAccel[2] = config['max_angular_accel_z']
+
+
         self.accelerationCalculator.buoyance = config["force"] 
 
         return config
