@@ -18,7 +18,7 @@ find_package(catkin REQUIRED
     roscpp
     roslint
     sensor_msgs
-    riptide_msgs
+    trajectory_msgs
     tf
     tf2_geometry_msgs
     control_toolbox
@@ -53,10 +53,11 @@ add_action_files(
   GetDistance.action
   Align.action
   ThrusterTest.action
+  FollowTrajectory.action
 )
 
 generate_messages(
-  DEPENDENCIES actionlib_msgs std_msgs geometry_msgs # Or other packages containing msgs
+  DEPENDENCIES actionlib_msgs std_msgs geometry_msgs trajectory_msgs # Or other packages containing msgs
 )
 
 catkin_package(

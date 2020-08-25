@@ -32,6 +32,8 @@ from abc import ABCMeta, abstractmethod
 import yaml
 from dynamic_reconfigure.server import Server
 from riptide_controllers.cfg import NewControllerConfig
+import riptide_controllers.msg
+import actionlib
 
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
@@ -289,6 +291,34 @@ class AccelerationCalculator:
 
         return netForce, netTorque
 
+class TrajectoryReader:
+
+    def __init__(self, linear_controller, angular_controller):
+        self.linear_controller = linear_controller
+        self.angular_controller = angular_controller
+        self._as = actionlib.SimpleActionServer("follow_trajectory", riptide_controllers.msg.FollowTrajectoryAction, execute_cb=self.execute_cb, auto_start=False)
+        self._as.start()
+
+    def execute_cb(self, goal):
+        start = rospy.get_rostime()
+
+        for point in goal.trajectory.points:
+            while (rospy.get_rostime() - start) < point.time_from_start:
+                rospy.sleep(0.01)
+
+            self.linear_controller.targetPosition = msgToNumpy(point.transforms[0].translation)
+            self.linear_controller.targetVelocity = msgToNumpy(point.velocities[0].linear)
+            self.linear_controller.targetAcceleration = msgToNumpy(point.accelerations[0].linear)
+            self.angular_controller.targetPosition = msgToNumpy(point.transforms[0].rotation)
+            self.angular_controller.targetVelocity = msgToNumpy(point.velocities[0].angular)
+            self.angular_controller.targetAcceleration = msgToNumpy(point.accelerations[0].angular)
+            
+            
+
+
+
+        
+
 class ControllerNode:
 
     def __init__(self):
@@ -299,6 +329,7 @@ class ControllerNode:
         self.linearController = LinearCascadedPController()
         self.angularController = AngularCascadedPController()
         self.accelerationCalculator = AccelerationCalculator(config)
+        self.trajectoryReader = TrajectoryReader(self.linearController, self.angularController)
 
         self.maxLinearVelocity = config["maximum_linear_velocity"]
         self.maxLinearAcceleration = config["maximum_linear_acceleration"]
@@ -320,7 +351,7 @@ class ControllerNode:
         self.lastForce = None
         self.off = True
 
-        # self.reconfigure_server = Server(NewControllerConfig, controller.dynamicReconfigureCb)
+        self.reconfigure_server = Server(NewControllerConfig, self.dynamicReconfigureCb)
         
         # config = NewControllerConfig()
 
