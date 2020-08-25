@@ -1,5 +1,27 @@
 #!/usr/bin/env python
 
+# controller node
+#
+# Input topics:
+#   odometry/filtered: Current state of the vehicle
+#   orientation: Puts the angular controller in position mode. Sets angular target to given orientation
+#   angular_velocity: Puts the angular controller in velocity mode. Sets angular target to given body-frame angular velocity
+#   disable_angular: Puts the angular controller in disabled mode.
+#   position: Puts the linear controller in position mode. Sets linear target to given world-frame position
+#   linear_velocity: Puts the linear controller in velocity mode. Sets linear target to given body-frame linear velocity
+#   disable_linear: Puts the linear controller in disabled mode.
+#   off: Turns off the controller. This will stop all output from the controller and thruster will stop
+#
+# Output topics:
+#   net_force: The force the robot should exert on the world to achieve the given target
+#   ~requested_accel: The acceleration requested from the controllers. Used for calibration
+#
+# This node contains 4 parts. The linear controller, the angular controller, the acceleration calculator, and the trajectory reader.
+# The linear and angular controllers return an acceleration the robot should eperience to achieve that controller's target.
+# The acceleration calculator takes that acceleration and computes how much force the robot needs to exert to achieve that acceleration.
+# The trajectory reader will feed current states to the controllers to follow a trajectory.
+
+
 import rospy
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, Vector3, Twist
@@ -259,15 +281,13 @@ class AccelerationCalculator:
         precessionTorque = -np.cross(angularVelo, (self.inertia * angularVelo))
         dragForce = self.linearDrag[:3] * linearVelo + self.quadraticDrag[:3] * abs(linearVelo) * linearVelo
         dragTorque = self.linearDrag[3:] * angularVelo + self.quadraticDrag[3:] * abs(angularVelo) * angularVelo
-        gravityForce = worldToBody(orientation, np.array([0, 0, - self.gravity * self.mass]))     
+        gravityForce = worldToBody(orientation, np.array([0, 0, - self.gravity * self.mass]))
                 
         # Net Calculation
         netForce = netForce - bodyFrameBuoyancy - dragForce - gravityForce
         netTorque = netTorque - buoyancyTorque - precessionTorque - dragTorque
 
         return netForce, netTorque
-
-    
 
 class ControllerNode:
 
@@ -279,8 +299,6 @@ class ControllerNode:
         self.linearController = LinearCascadedPController()
         self.angularController = AngularCascadedPController()
         self.accelerationCalculator = AccelerationCalculator(config)
-
-        self.angularController.positionP = np.array([100, 100, 100])
 
         self.maxLinearVelocity = config["maximum_linear_velocity"]
         self.maxLinearAcceleration = config["maximum_linear_acceleration"]
