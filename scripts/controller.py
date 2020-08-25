@@ -302,6 +302,12 @@ class ControllerNode:
         self.lastForce = None
         self.off = True
 
+        self.reconfigure_server = Server(NewControllerConfig, controller.dynamicReconfigureCb)
+        
+        config = NewControllerConfig()
+        
+        self.reconfigure_server.update_configuration(config)
+
     def updateState(self, odomMsg):
         linearAccel = self.linearController.update(odomMsg)
         angularAccel = self.angularController.update(odomMsg)
@@ -363,6 +369,5 @@ class ControllerNode:
 
 if __name__ == '__main__':
     rospy.init_node("controller")
-    controller = ControllerNode()
-    Server(NewControllerConfig, controller.dynamicReconfigureCb)
+    controller = ControllerNode()    
     rospy.spin()
