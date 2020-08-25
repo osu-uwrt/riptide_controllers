@@ -64,9 +64,7 @@ class ThrusterSolverNode:
         self.power_priority = 0.001
         self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
 
-        # Wait for localization to start up
-        rospy.sleep(5)
-
+        self.start_time = None
         self.timer = rospy.Timer(rospy.Duration(0.1), self.check_thrusters)
         self.listener = TransformListener()
         self.WATER_LEVEL = 0
@@ -75,13 +73,17 @@ class ThrusterSolverNode:
     # Timer callback which disables thrusters that are out of the water
     def check_thrusters(self, timer_event):
         try:
+            if self.start_time is None:
+                self.start_time = rospy.get_rostime()
             self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
             for i in range(self.thruster_coeffs.shape[0]):
                 trans, _ = self.listener.lookupTransform("/world", "/%s/thruster_%d" % (self.tf_namespace, i), rospy.Time(0))      
                 if trans[2] > self.WATER_LEVEL:
                     self.current_thruster_coeffs[i, :] = 0
         except Exception as ex:
-            rospy.logerr(str(ex))
+            # Supress startup errors
+            if (rospy.get_rostime() - self.start_time).secs > 1:
+                rospy.logerr(str(ex))
 
     # Cost function forcing the thruster to output desired net force
     def force_cost(self, thruster_forces, desired_state):
