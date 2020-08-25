@@ -320,11 +320,11 @@ class ControllerNode:
         self.lastForce = None
         self.off = True
 
-        self.reconfigure_server = Server(NewControllerConfig, controller.dynamicReconfigureCb)
+        # self.reconfigure_server = Server(NewControllerConfig, controller.dynamicReconfigureCb)
         
-        config = NewControllerConfig()
-        
-        self.reconfigure_server.update_configuration(config)
+        # config = NewControllerConfig()
+
+        # self.reconfigure_server.update_configuration(config)
 
     def updateState(self, odomMsg):
         linearAccel = self.linearController.update(odomMsg)
