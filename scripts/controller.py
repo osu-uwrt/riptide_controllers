@@ -67,7 +67,7 @@ class CascadedPController:
         self.targetVelocity = None
         self.targetAcceleration = None
         self.positionP = np.array([1, 1, 1])
-        self.velocityP = np.array([5, 5, 5])
+        self.velocityP = np.array([1, 1, 1])
         self.maxVelocity = np.array([1, .7, .8])
         self.maxAccel = np.array([1, .7, .8])
 
@@ -323,10 +323,18 @@ class ControllerNode:
         self.reconfigure_server = Server(NewControllerConfig, self.dynamicReconfigureCb)      
         # set default values in dynamic reconfig  
         self.reconfigure_server.update_configuration({
-            "linear_position_p": self.linearController.positionP,
-            "linear_velocity_p": self.linearController.velocityP,   
-            "angular_position_p": self.angularController.positionP,
-            "angular_velocity_p": self.angularController.velocityP,                             
+            "linear_position_p_x": config["linear_position_p"][0],
+            "linear_position_p_y": config["linear_position_p"][1],
+            "linear_position_p_z": config["linear_position_p"][2],
+            "linear_velocity_p_x": config["linear_velocity_p"][0],
+            "linear_velocity_p_y": config["linear_velocity_p"][1],
+            "linear_velocity_p_z": config["linear_velocity_p"][2],
+            "angular_position_p_x": config["angular_position_p"][0],
+            "angular_position_p_y": config["angular_position_p"][1],
+            "angular_position_p_z": config["angular_position_p"][2],
+            "angular_velocity_p_x": config["angular_velocity_p"][0],
+            "angular_velocity_p_y": config["angular_velocity_p"][1],
+            "angular_velocity_p_z": config["angular_velocity_p"][2], 
             "linear_x": config["linear_damping"][0],
             "linear_y": config["linear_damping"][1],
             "linear_z": config["linear_damping"][2],
@@ -379,10 +387,19 @@ class ControllerNode:
             self.lastTorque = netTorque
     
     def dynamicReconfigureCb(self, config, level):
-        self.linearController.positionP = config["linear_position_p"]
-        self.linearController.velocityP = config["linear_velocity_p"]
-        self.angularController.positionP = config["angular_position_p"]
-        self.angularController.velocityP = config["angular_velocity_p"]
+        self.linearController.positionP[0] = config["linear_position_p_x"]
+        self.linearController.positionP[1] = config["linear_position_p_y"]
+        self.linearController.positionP[2] = config["linear_position_p_z"]
+        self.linearController.velocityP[0] = config["linear_velocity_p_x"]
+        self.linearController.velocityP[1] = config["linear_velocity_p_y"]
+        self.linearController.velocityP[2] = config["linear_velocity_p_z"]
+        
+        self.angularController.positionP[0] = config["angular_position_p_x"]
+        self.angularController.positionP[1] = config["angular_position_p_y"]
+        self.angularController.positionP[2] = config["angular_position_p_z"]
+        self.angularController.velocityP[0] = config["angular_velocity_p_x"]
+        self.angularController.velocityP[1] = config["angular_velocity_p_y"]
+        self.angularController.velocityP[2] = config["angular_velocity_p_z"]
 
         self.accelerationCalculator.linearDrag[0] = config["linear_x"]    
         self.accelerationCalculator.linearDrag[1] = config["linear_y"] 
