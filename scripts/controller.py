@@ -32,6 +32,8 @@ from abc import ABCMeta, abstractmethod
 import yaml
 from dynamic_reconfigure.server import Server
 from riptide_controllers.cfg import NewControllerConfig
+import actionlib
+import riptide_controllers.msg
 
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
@@ -66,10 +68,10 @@ class CascadedPController:
         self.targetPosition = None
         self.targetVelocity = None
         self.targetAcceleration = None
-        self.positionP = np.array([1, 1, 1])
-        self.velocityP = np.array([1, 1, 1])
-        self.maxVelocity = np.array([1, .7, .8])
-        self.maxAccel = np.array([1, .7, .8])
+        self.positionP = np.zeros(3, np.float64)
+        self.velocityP = np.zeros(3, np.float64)
+        self.maxVelocity = np.zeros(3, np.float64)
+        self.maxAccel = np.zeros(3, np.float64)
 
     @abstractmethod
     def computeCorrectiveVelocity(self, odom):
@@ -241,13 +243,13 @@ class AccelerationCalculator:
         self.mass = np.array(config["mass"])
         self.com = np.array(config["com"])
         self.inertia = np.array(config["inertia"])
-        self.linearDrag = np.array([0,0,0,0,0,0])
-        self.quadraticDrag = np.array([0,0,0,0,0,0])
+        self.linearDrag = np.zeros(6, np.float64)
+        self.quadraticDrag = np.zeros(6, np.float64)
         self.volume = np.array(config["volume"])
-        self.cob = np.array([0,0,0])
+        self.cob = np.zeros(3, np.float64)
         self.gravity = 9.8 # (m/sec^2)
         self.density = 1000 # density of water (kg/m^3)
-        self.buoyancy = np.array([0, 0, self.volume * self.gravity * self.density])
+        self.buoyancy = np.zeros(3, np.float64)
 
     def accelToNetForce(self, odom, linearAccel, angularAccel):
         """ 
@@ -276,7 +278,6 @@ class AccelerationCalculator:
         
         # Forces and Torques Calculation
         bodyFrameBuoyancy = worldToBody(orientation, self.buoyancy)
-        # bodyFrameBuoyancy = worldToBody(orientation, np.array([0, 0, self.volume * self.gravity * self.density]))
         buoyancyTorque = np.cross((self.cob-self.com), bodyFrameBuoyancy)
         precessionTorque = -np.cross(angularVelo, (self.inertia * angularVelo))
         dragForce = self.linearDrag[:3] * linearVelo + self.quadraticDrag[:3] * abs(linearVelo) * linearVelo
@@ -289,6 +290,34 @@ class AccelerationCalculator:
 
         return netForce, netTorque
 
+class TrajectoryReader:
+
+    def __init__(self, linear_controller, angular_controller):
+        self.linear_controller = linear_controller
+        self.angular_controller = angular_controller
+        self._as = actionlib.SimpleActionServer("follow_trajectory", riptide_controllers.msg.FollowTrajectoryAction, execute_cb=self.execute_cb, auto_start=False)
+        self._as.start()
+
+    def execute_cb(self, goal):
+        start = rospy.get_rostime()
+
+        for point in goal.trajectory.points:
+            while (rospy.get_rostime() - start) < point.time_from_start:
+                rospy.sleep(0.01)
+
+            self.linear_controller.targetPosition = msgToNumpy(point.transforms[0].translation)
+            self.linear_controller.targetVelocity = msgToNumpy(point.velocities[0].linear)
+            self.linear_controller.targetAcceleration = msgToNumpy(point.accelerations[0].linear)
+            self.angular_controller.targetPosition = msgToNumpy(point.transforms[0].rotation)
+            self.angular_controller.targetVelocity = msgToNumpy(point.velocities[0].angular)
+            self.angular_controller.targetAcceleration = msgToNumpy(point.accelerations[0].angular)
+
+        last_point = goal.trajectory.points[-1]
+        self.linear_controller.setTargetPosition(last_point.transforms[0].translation)
+        self.angular_controller.setTargetPosition(last_point.transforms[0].rotation)
+
+        self._as.set_succeeded()
+
 class ControllerNode:
 
     def __init__(self):
@@ -299,6 +328,7 @@ class ControllerNode:
         self.linearController = LinearCascadedPController()
         self.angularController = AngularCascadedPController()
         self.accelerationCalculator = AccelerationCalculator(config)
+        self.trajectory_reader = TrajectoryReader(self.linearController, self.angularController)
 
         self.maxLinearVelocity = config["maximum_linear_velocity"]
         self.maxLinearAcceleration = config["maximum_linear_acceleration"]
