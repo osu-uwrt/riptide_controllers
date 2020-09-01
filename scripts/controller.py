@@ -68,10 +68,10 @@ class CascadedPController:
         self.targetPosition = None
         self.targetVelocity = None
         self.targetAcceleration = None
-        self.positionP = np.zeros(3, np.float64)
-        self.velocityP = np.zeros(3, np.float64)
-        self.maxVelocity = np.zeros(3, np.float64)
-        self.maxAccel = np.zeros(3, np.float64)
+        self.positionP = np.zeros(3)
+        self.velocityP = np.zeros(3)
+        self.maxVelocity = np.zeros(3)
+        self.maxAccel = np.zeros(3)
 
     @abstractmethod
     def computeCorrectiveVelocity(self, odom):
@@ -243,13 +243,13 @@ class AccelerationCalculator:
         self.mass = np.array(config["mass"])
         self.com = np.array(config["com"])
         self.inertia = np.array(config["inertia"])
-        self.linearDrag = np.zeros(6, np.float64)
-        self.quadraticDrag = np.zeros(6, np.float64)
+        self.linearDrag = np.zeros(6)
+        self.quadraticDrag = np.zeros(6)
         self.volume = np.array(config["volume"])
-        self.cob = np.zeros(3, np.float64)
+        self.cob = np.zeros(3)
         self.gravity = 9.8 # (m/sec^2)
         self.density = 1000 # density of water (kg/m^3)
-        self.buoyancy = np.zeros(3, np.float64)
+        self.buoyancy = np.zeros(3)
 
     def accelToNetForce(self, odom, linearAccel, angularAccel):
         """ 
