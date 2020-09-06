@@ -1,6 +1,6 @@
 <launch>
   <param name="vehicle_file" type="string" value="$(find riptide_descriptions)/config/puddles.yaml" />
-  <node pkg="riptide_controllers" type="calibrate.py" name="calibrate" output="screen" />
+  <node pkg="riptide_controllers" type="calibrateBuoyancy.py" name="calibrate_buoyancy" output="screen" />
   <node pkg="riptide_controllers" type="goToDepth.py" name="go_to_depth" output="screen" />
   <node pkg="riptide_controllers" type="goToRoll.py" name="go_to_roll" output="screen" />
   <node pkg="riptide_controllers" type="goToPitch.py" name="go_to_pitch" output="screen" />
