@@ -302,7 +302,16 @@ class TrajectoryReader:
         start = rospy.get_rostime()
 
         for point in goal.trajectory.points:
+            # Wait for next point
             while (rospy.get_rostime() - start) < point.time_from_start:
+                if self._as.is_preempt_requested():
+                    self.linear_controller.targetVelocity = np.zeros(3)
+                    self.linear_controller.targetAcceleration = np.zeros(3)
+                    self.angular_controller.targetVelocity = np.zeros(3)
+                    self.angular_controller.targetAcceleration = np.zeros(3)
+                    self._as.set_preempted()
+                    return
+
                 rospy.sleep(0.01)
 
             self.linear_controller.targetPosition = msgToNumpy(point.transforms[0].translation)
