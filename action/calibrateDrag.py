@@ -9,88 +9,58 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import Float64, Header
 from geometry_msgs.msg import Quaternion, Vector3Stamped, Vector3, Twist
 from dynamic_reconfigure.server import Server
+from dynamic_reconfigure.client import Client
 from riptide_controllers.cfg import AttitudeControllerConfig
 from tf.transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_from_euler
 from math import sin, cos, tan, acos, pi
 import numpy as np
 
-
-# def rollAction(angle):
-#     client = actionlib.SimpleActionClient(
-#         "go_to_roll", riptide_controllers.msg.GoToRollAction)
-#     client.wait_for_server()
-
-#     client.send_goal(riptide_controllers.msg.GoToRollGoal(angle))
-#     return client
-
-# def pitchAction(angle):
-#     client = actionlib.SimpleActionClient(
-#         "go_to_pitch", riptide_controllers.msg.GoToPitchAction)
-#     client.wait_for_server()
-
-#     client.send_goal(riptide_controllers.msg.GoToPitchGoal(angle))
-#     return client
-
-# def yawAction(angle):
-#     client = actionlib.SimpleActionClient(
-#         "go_to_yaw", riptide_controllers.msg.GoToYawAction)
-#     client.wait_for_server()
-
-#     client.send_goal(riptide_controllers.msg.GoToYawGoal(angle))
-#     return client
-
+# Z axis is a little off, load interia from puddles.yaml, and update dynamic reconfigure
 
 
 class CalibrateDragAction(object):
 
     def __init__(self):
-        self.posePub = rospy.Publisher("position", Vector3, queue_size=5)
-        self.orientPub = rospy.Publisher("orientation", Quaternion, queue_size=5)
-        self.linPub = rospy.Publisher("linear_velocity", Vector3, queue_size=5)
-        self.angPub = rospy.Publisher("angular_velocity", Vector3, queue_size=5)
-        self.mass = 39.825 #kg
-        self.forces = [[] for i in range(6)]
-        self.velocities = [[] for i in range(6)]
-        self.avgl = [[] for i in range(6)]    #average linear
-        self.avgq = [[] for i in range(6)]    #average quadratic
+        self.orientation_pub = rospy.Publisher("orientation", Quaternion, queue_size=5)
+        self.lin_vel_pub = rospy.Publisher("linear_velocity", Vector3, queue_size=5)
+        self.ang_vel_pub = rospy.Publisher("angular_velocity", Vector3, queue_size=5)
+        self.inertia = np.array([39.825, 39.825, 39.825, 1.32, 2.84, 3.65]) #kg
         self._as = actionlib.SimpleActionServer("calibrate_drag", riptide_controllers.msg.CalibrateDragAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
+        self.client = Client("controller", timeout=30)
     
-    # Example use: r, p, y = getEuler(odom)
+    # Example use: r, p, y = get_euler(odom)
     # RPY in radians
-    def getEuler(self, odomMsg):
-        quat = odomMsg.pose.pose.orientation
+    def get_euler(self, odom_msg):
+        quat = odom_msg.pose.pose.orientation
         quat = [quat.x, quat.y, quat.z, quat.w]
         return euler_from_quaternion(quat)
 
-    def getQuat(self, r, p, y):
-        return quaternion_from_euler(r, p, y)
-
-    def restrictAngle(self, angle):
+    def restrict_angle(self, angle):
         return ((angle + 180) % 360 ) - 180
 
     # Roll, Pitch, and Yaw configuration
-    def toPose(self, r, p, y, hold=True):
-        quat = self.getQuat(r, p, y)
-        self.orientPub.publish(quat[0], quat[1], quat[2], quat[3])
-        if not hold:
-            self.orientPub.publish(0, 0, 0, 0)
-            rospy.sleep(0.5)
-
+    def to_orientation(self, r, p, y):
+        r *= pi / 180
+        p *= pi / 180
+        y *= pi / 180
+        quat = quaternion_from_euler(r, p, y)
+        self.orientation_pub.publish(Quaternion(*quat))
+        rospy.sleep(4)
 
 
     # Apply force on corresponding axes and record velocities
-    def collectData(self, axis, velo):
-        veloPublishers = [
-            lambda x: self.linPub.publish(x, 0, 0),
-            lambda x: self.linPub.publish(0, x, 0),
-            lambda x: self.linPub.publish(0, 0, x),
-            lambda x: self.angPub.publish(x, 0, 0),
-            lambda x: self.angPub.publish(0, x, 0),
-            lambda x: self.angPub.publish(0, 0, x)
+    def collect_data(self, axis, velocity):
+        publish_velocity = [
+            lambda x: self.lin_vel_pub.publish(x, 0, 0),
+            lambda y: self.lin_vel_pub.publish(0, y, 0),
+            lambda z: self.lin_vel_pub.publish(0, 0, z),
+            lambda x: self.ang_vel_pub.publish(x, 0, 0),
+            lambda y: self.ang_vel_pub.publish(0, y, 0),
+            lambda z: self.ang_vel_pub.publish(0, 0, z)
         ]
 
-        twistFunctions = [
+        get_twist = [
             lambda odom: odom.twist.twist.linear.x,
             lambda odom: odom.twist.twist.linear.y,
             lambda odom: odom.twist.twist.linear.z,
@@ -99,111 +69,115 @@ class CalibrateDragAction(object):
             lambda odom: odom.twist.twist.angular.z
         ]
 
-        accelRead = [
-            lambda x: x.linear.x,
-            lambda x: x.linear.y,
-            lambda x: x.linear.z,
-            lambda x: x.angular.x,
-            lambda x: x.angular.y,
-            lambda x: x.angular.z
+        get_accel = [
+            lambda twist: twist.linear.x,
+            lambda twist: twist.linear.y,
+            lambda twist: twist.linear.z,
+            lambda twist: twist.angular.x,
+            lambda twist: twist.angular.y,
+            lambda twist: twist.angular.z
         ]
 
-        velocities = []
-        veloPublishers[axis](velo)
+        
+        publish_velocity[axis](velocity)
+
         rospy.sleep(1)
-        odomMsg = rospy.wait_for_message("odometry/filtered", Odometry)
-        v0 = 0
-        v1 = twistFunctions[axis](odomMsg)
-        i = 0
-        while i < 10:
-            if abs((v1 - v0)/v1) >= 0.02:
-                odomMsg = rospy.wait_for_message("odometry/filtered", Odometry)
-                v0 = v1
-                v1 = twistFunctions[axis](odomMsg)
-                i = 0
+        last_vel = 0
+        stable_measurements = 0
+        while stable_measurements < 10:
+            odom_msg = rospy.wait_for_message("odometry/filtered", Odometry)
+            cur_vel = get_twist[axis](odom_msg)
+
+            if abs((cur_vel - last_vel) / cur_vel) >= 0.1:
+                stable_measurements = 0
             else:
-                i += 1
+                stable_measurements += 1
+            last_vel = cur_vel
             rospy.sleep(0.1)
 
+        velocities = []
         for _ in range (10):
-            odomMsg = rospy.wait_for_message("odometry/filtered", Odometry)
-            velocities.append(twistFunctions[axis](odomMsg))
-            rospy.sleep(0.05)
+            odom_msg = rospy.wait_for_message("odometry/filtered", Odometry)
+            velocities.append(get_twist[axis](odom_msg))
+            rospy.sleep(0.1)
 
-        odomMsg = rospy.wait_for_message("odometry/filtered", Odometry)
-        accelMsg = rospy.wait_for_message("controller/requested_accel", Twist)
-        self.forces[axis].append(accelRead[axis](accelMsg)*self.mass)
-        veloPublishers[axis](0)
-        velocity = np.average(velocities)
-        self.velocities[axis].append(velocity)
+        forces = []
+        for _ in range (10):
+            accel_msg = rospy.wait_for_message("controller/requested_accel", Twist)
+            forces.append(get_accel[axis](accel_msg) * self.inertia[axis])
+            rospy.sleep(0.1)
+
+        publish_velocity[axis](0)
+
+        return np.average(velocities), np.average(forces)
     
     # Calcualte the multivariable linear regression of linear and quadratic damping
-    def calculateParameters(self, axis):
-        y = np.array(self.forces[axis])
-        X = np.array([self.velocities[axis], np.abs(self.velocities[axis]) * np.array(self.velocities[axis])])
+    def calculate_parameters(self, velocities, forces):
+        y = np.array(forces)
+        X = np.array([velocities, np.abs(velocities) * np.array(velocities)])
         X = X.T # transpose so input vectors are along the rows
-        beta_hat = np.linalg.lstsq(X,y)[0]
-        self.avgl[axis].append(beta_hat[0])
-        self.avgq[axis].append(beta_hat[1])
-
-    # Velocity configuration for each axis
-    def testData(self, axis):
-        axesVelo = [
-            [0.5, -0.5, 1, -1, 2, -2],
-            [0.5, -0.5, 1, -1, 2, -2],
-            [0.5, -0.5, 1, -1, 2, -2],
-            [0.2, -0.2, 0.5, -0.5, 1.2, -1.2],
-            [0.2, -0.2, 0.5, -0.5, 1.2, -1.2],
-            [0.2, -0.2, 0.5, -0.5, 1.2, -1.2],
-        ]
-        for velo in axesVelo[axis]:
-            self.collectData(axis, velo)
+        return np.linalg.lstsq(X,y)[0]
 
     # Set depth in rqt before running action
     def execute_cb(self, goal):
+        self.client.update_configuration({
+            "linear_x": 0,
+            "linear_y": 0,
+            "linear_z": 0,
+            "linear_rot_x": 0,
+            "linear_rot_y": 0,
+            "linear_rot_z": 0,
+            "quadratic_x": 0,
+            "quadratic_y": 0,
+            "quadratic_z": 0,
+            "quadratic_rot_x": 0,
+            "quadratic_rot_y": 0,
+            "quadratic_rot_z": 0
+        })
+
         # Initialize starting position of robot
-        odomMsg = rospy.wait_for_message("odometry/filtered", Odometry)
-        startY = self.getEuler(odomMsg)[2] * 180 / pi
+        odom_msg = rospy.wait_for_message("odometry/filtered", Odometry)
+        startY = self.get_euler(odom_msg)[2] * 180 / pi
         rospy.loginfo("Starting drag calibration")
 
-        # X axis
-        self.toPose(0, 0, startY)
-        self.testData(0)
-        self.calculateParameters(0)
+        linear_params = np.zeros(6)
+        quadratic_params = np.zeros(6)
 
-        # Y axis
-        newY = self.restrictAngle(startY - 90)
-        self.toPose(0, 0, newY)
-        self.testData(1)
-        self.calculateParameters(1)
+        # Euler for ease of use
+        axes_test_orientations = [
+            [0, 0, startY],
+            [0, 0, self.restrict_angle(startY - 90)],
+            [0, -90, startY],
+            [0, -90, startY],
+            [90, 0, startY],
+            [0, 0, startY]
+        ]
 
-        # Z axis
-        self.toPose(-90, 0, newY)
-        self.testData(2)
-        self.calculateParameters(2)
+        axis_velocities = [
+            [0.05, -0.05, .1, -.1, .2, -.2],
+            [0.05, -0.05, .1, -.1, .2, -.2],
+            [-0.05, 0.05, -.1, .1, -.2, .2],
+            [0.2, -0.2, 0.5, -0.5, 1.2, -1.2],
+            [0.2, -0.2, 0.5, -0.5, 1.2, -1.2],
+            [0.2, -0.2, 0.5, -0.5, 1.2, -1.2],
+        ]
 
-        # X axis
-        self.toPose(0, -90, startY, hold=False)
-        self.testData(3)
-        self.calculateParameters(3)
+        for axis in range(6):
+            self.to_orientation(*axes_test_orientations[axis])
 
-        # Y axis
-        self.toPose(90, 0, startY, hold=False)
-        self.testData(4)
-        self.calculateParameters(4)
+            forces = []
+            velocities = []
+            for requested_velocity in axis_velocities[axis]:
+                velocity, force = self.collect_data(axis, requested_velocity)
+                forces.append(force)
+                velocities.append(velocity)
 
-        # Z axis
-        self.toPose(0, 0, startY, hold=False)
-        self.testData(5)
-        self.calculateParameters(5)
+            linear_params[axis], quadratic_params[axis] = self.calculate_parameters(velocities, forces)
 
-        self.toPose(0, 0, startY)
+        self.to_orientation(0, 0, startY)
 
-        # Display forces, linear damping, and quadratic damping [[x],[y],[z],[x-rot],[y-rot],[z-rot]]
-        rospy.loginfo('Forces: ' + str(self.forces))
-        rospy.loginfo('Velocities: ' + str(self.velocities))
-        rospy.loginfo('Linear Damping: ' + str(self.avgl))
-        rospy.loginfo('Quadratic Damping: ' + str(self.avgq))
+        rospy.loginfo('Linear Damping: ' + str(linear_params))
+        rospy.loginfo('Quadratic Damping: ' + str(quadratic_params))
         rospy.loginfo("Drag calibration completed.")
 
         self._as.set_succeeded()
