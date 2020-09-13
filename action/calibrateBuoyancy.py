@@ -29,6 +29,13 @@ class CalibrateBuoyancyAction(object):
         self.position_pub = rospy.Publisher("position", Vector3, queue_size=1)
         self.orientation_pub = rospy.Publisher("orientation", Quaternion, queue_size=1)
         self.off_pub = rospy.Publisher("off", Empty, queue_size=1)
+
+        # Get the mass and COM
+        with open(rospy.get_param('vehicle_file'), 'r') as stream:
+            vehicle = yaml.safe_load(stream)
+            self.mass = vehicle['mass']
+            self.com = np.array(vehicle['com'])
+            self.inertia = np.array(vehicle['inertia'])
         
         self._as = actionlib.SimpleActionServer("calibrate_buoyancy", riptide_controllers.msg.CalibrateBuoyancyAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
@@ -37,19 +44,13 @@ class CalibrateBuoyancyAction(object):
     def execute_cb(self, goal):
         self.client = dynamic_reconfigure.client.Client("controller", timeout=30)
 
-        # Get the mass and COM
-        with open(rospy.get_param('vehicle_file'), 'r') as stream:
-            vehicle = yaml.safe_load(stream)
-            mass = vehicle['mass']
-            com = np.array(vehicle['com'])
-            inertia = np.array(vehicle['inertia'])
 
         self.initial_config = self.client.get_configuration()
             
 
         rospy.loginfo("Starting buoyancy calibration")
-        buoyant_force = mass * GRAVITY
-        cob = com
+        buoyant_force = self.mass * GRAVITY
+        cob = self.com
 
         # Reset parameters to default
         self.client.update_configuration({
@@ -109,7 +110,7 @@ class CalibrateBuoyancyAction(object):
             rospy.sleep(3)
 
             accel = msg_to_numpy(rospy.wait_for_message("controller/requested_accel", Twist).angular)
-            torque = inertia * accel
+            torque = self.inertia * accel
 
             adjustment_x = torque[1] / buoyant_force
             adjustment_y = torque[0] / buoyant_force

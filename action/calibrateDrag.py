@@ -1,16 +1,16 @@
 #! /usr/bin/env python
 import rospy
 import actionlib
+import yaml
+
 import dynamic_reconfigure.client
 import riptide_controllers.msg
-
-from riptide_msgs.msg import AttitudeCommand, DepthCommand, LinearCommand
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Float64, Header
 from geometry_msgs.msg import Quaternion, Vector3Stamped, Vector3, Twist
 from dynamic_reconfigure.server import Server
 from dynamic_reconfigure.client import Client
-from riptide_controllers.cfg import AttitudeControllerConfig
+
 from tf.transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_from_euler
 from math import sin, cos, tan, acos, pi
 import numpy as np
@@ -24,7 +24,14 @@ class CalibrateDragAction(object):
         self.orientation_pub = rospy.Publisher("orientation", Quaternion, queue_size=5)
         self.lin_vel_pub = rospy.Publisher("linear_velocity", Vector3, queue_size=5)
         self.ang_vel_pub = rospy.Publisher("angular_velocity", Vector3, queue_size=5)
-        self.inertia = np.array([39.825, 39.825, 39.825, 1.32, 2.84, 3.65]) #kg
+
+        # Get the mass and COM
+        with open(rospy.get_param('vehicle_file'), 'r') as stream:
+            vehicle = yaml.safe_load(stream)
+            mass = vehicle['mass']
+            rotational_inertia = np.array(vehicle['inertia'])
+            self.inertia = np.array([mass, mass, mass, rotational_inertia[0], rotational_inertia[1], rotational_inertia[2]])
+
         self._as = actionlib.SimpleActionServer("calibrate_drag", riptide_controllers.msg.CalibrateDragAction, execute_cb=self.execute_cb, auto_start=False)
         self._as.start()
         self.client = Client("controller", timeout=30)
@@ -109,7 +116,7 @@ class CalibrateDragAction(object):
 
         publish_velocity[axis](0)
 
-        return np.average(velocities), np.average(forces)
+        return np.average(velocities), -np.average(forces)
     
     # Calcualte the multivariable linear regression of linear and quadratic damping
     def calculate_parameters(self, velocities, forces):
@@ -179,6 +186,21 @@ class CalibrateDragAction(object):
         rospy.loginfo('Linear Damping: ' + str(linear_params))
         rospy.loginfo('Quadratic Damping: ' + str(quadratic_params))
         rospy.loginfo("Drag calibration completed.")
+
+        self.client.update_configuration({
+            "linear_x": linear_params[0],
+            "linear_y": linear_params[1],
+            "linear_z": linear_params[2],
+            "linear_rot_x": linear_params[3],
+            "linear_rot_y": linear_params[4],
+            "linear_rot_z": linear_params[5],
+            "quadratic_x": quadratic_params[0],
+            "quadratic_y": quadratic_params[1],
+            "quadratic_z": quadratic_params[2],
+            "quadratic_rot_x": quadratic_params[3],
+            "quadratic_rot_y": quadratic_params[4],
+            "quadratic_rot_z": quadratic_params[5]
+        })
 
         self._as.set_succeeded()
   

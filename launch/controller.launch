@@ -4,5 +4,7 @@
 	<include file="$(find riptide_controllers)/launch/new_controller.launch">
 		<arg name="robot" value="$(arg robot)" />
 	</include>
-	<include file="$(find riptide_controllers)/launch/actions.launch" />
+	<include file="$(find riptide_controllers)/launch/actions.launch">
+		<arg name="robot" value="$(arg robot)" />
+	</include>
 </launch>
