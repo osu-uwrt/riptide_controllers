@@ -25,13 +25,15 @@ def msg_to_numpy(msg):
 
 class CalibrateBuoyancyAction(object):
 
+    _result = riptide_controllers.msg.CalibrateBuoyancyResult()
+
     def __init__(self):
         self.position_pub = rospy.Publisher("position", Vector3, queue_size=1)
         self.orientation_pub = rospy.Publisher("orientation", Quaternion, queue_size=1)
         self.off_pub = rospy.Publisher("off", Empty, queue_size=1)
 
         # Get the mass and COM
-        with open(rospy.get_param('vehicle_file'), 'r') as stream:
+        with open(rospy.get_param('~vehicle_config'), 'r') as stream:
             vehicle = yaml.safe_load(stream)
             self.mass = vehicle['mass']
             self.com = np.array(vehicle['com'])
@@ -84,7 +86,7 @@ class CalibrateBuoyancyAction(object):
         # Average 10 samples
         force_measurements = []
         for _ in range(10):
-            force_msg = mass * msg_to_numpy(rospy.wait_for_message("controller/requested_accel", Twist).linear)
+            force_msg = self.mass * msg_to_numpy(rospy.wait_for_message("controller/requested_accel", Twist).linear)
             force = np.linalg.norm(force_msg)
             if force_msg[2] < 0:
                 force *= -1
@@ -146,7 +148,7 @@ class CalibrateBuoyancyAction(object):
             rospy.sleep(3)
 
             accel = msg_to_numpy(rospy.wait_for_message("controller/requested_accel", Twist).angular)
-            torque = inertia * accel
+            torque = self.inertia * accel
 
             adjustment_z = torque[1] / buoyant_force / 2**.5
             cob[2] -= adjustment_z
@@ -164,7 +166,9 @@ class CalibrateBuoyancyAction(object):
 
         rospy.loginfo("Calibration complete")
         self.cleanup()
-        self._as.set_succeeded(buoyant_force, cob)
+        self._result.buoyant_force = buoyant_force
+        self._result.center_of_buoyancy = cob
+        self._as.set_succeeded(self._result)
 
     def check_preempted(self):
         if self._as.is_preempt_requested():

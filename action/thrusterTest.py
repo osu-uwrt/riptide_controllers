@@ -16,7 +16,7 @@ class ThrusterTest(object):
         self.thrust_pub = rospy.Publisher("thruster_forces", Float32MultiArray, queue_size=5)
 
         # Get the mass and COM
-        with open(rospy.get_param('vehicle_file'), 'r') as stream:
+        with open(rospy.get_param('~vehicle_config'), 'r') as stream:
             vehicle = yaml.safe_load(stream)
             self.num_thrusters = len(vehicle["thrusters"])
             self.max_force = vehicle["thruster"]["max_force"]

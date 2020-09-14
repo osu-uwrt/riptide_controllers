@@ -20,13 +20,15 @@ import numpy as np
 
 class CalibrateDragAction(object):
 
+    _result = riptide_controllers.msg.CalibrateDragResult()
+
     def __init__(self):
         self.orientation_pub = rospy.Publisher("orientation", Quaternion, queue_size=5)
         self.lin_vel_pub = rospy.Publisher("linear_velocity", Vector3, queue_size=5)
         self.ang_vel_pub = rospy.Publisher("angular_velocity", Vector3, queue_size=5)
 
         # Get the mass and COM
-        with open(rospy.get_param('vehicle_file'), 'r') as stream:
+        with open(rospy.get_param('~vehicle_config'), 'r') as stream:
             vehicle = yaml.safe_load(stream)
             mass = vehicle['mass']
             rotational_inertia = np.array(vehicle['inertia'])
@@ -53,7 +55,7 @@ class CalibrateDragAction(object):
         y *= pi / 180
         quat = quaternion_from_euler(r, p, y)
         self.orientation_pub.publish(Quaternion(*quat))
-        rospy.sleep(4)
+        rospy.sleep(5)
 
 
     # Apply force on corresponding axes and record velocities
@@ -115,6 +117,7 @@ class CalibrateDragAction(object):
             rospy.sleep(0.1)
 
         publish_velocity[axis](0)
+        rospy.sleep(0.1)
 
         return np.average(velocities), -np.average(forces)
     
@@ -154,8 +157,8 @@ class CalibrateDragAction(object):
         axes_test_orientations = [
             [0, 0, startY],
             [0, 0, self.restrict_angle(startY - 90)],
-            [0, -90, startY],
-            [0, -90, startY],
+            [0, -85, startY],
+            [0, -85, startY],
             [90, 0, startY],
             [0, 0, startY]
         ]
@@ -180,11 +183,11 @@ class CalibrateDragAction(object):
                 velocities.append(velocity)
 
             linear_params[axis], quadratic_params[axis] = self.calculate_parameters(velocities, forces)
+            rospy.loginfo("Linear: %f" % linear_params[axis])
+            rospy.loginfo("Quadratic: %f" % quadratic_params[axis])
 
         self.to_orientation(0, 0, startY)
 
-        rospy.loginfo('Linear Damping: ' + str(linear_params))
-        rospy.loginfo('Quadratic Damping: ' + str(quadratic_params))
         rospy.loginfo("Drag calibration completed.")
 
         self.client.update_configuration({
@@ -202,7 +205,9 @@ class CalibrateDragAction(object):
             "quadratic_rot_z": quadratic_params[5]
         })
 
-        self._as.set_succeeded()
+        self._result.linear_drag = linear_params
+        self._result.quadratic_drag = quadratic_params
+        self._as.set_succeeded(self._result)
   
         
 if __name__ == '__main__':
