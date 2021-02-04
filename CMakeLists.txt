@@ -22,6 +22,7 @@ add_action_files(
   CalibrateDrag.action
   ThrusterTest.action
   FollowTrajectory.action
+  ScriptOhio.action
 )
 
 generate_messages(
