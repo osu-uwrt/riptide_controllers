@@ -344,6 +344,12 @@ class ControllerNode:
         self.maxAngularVelocity = config["maximum_angular_velocity"]
         self.maxAngularAcceleration = config["maximum_angular_acceleration"]
 
+        self.lastTorque = None
+        self.lastForce = None
+        self.off = True
+
+        self.forcePub = rospy.Publisher("net_force", Twist, queue_size=5)
+        self.accelPub = rospy.Publisher("~requested_accel", Twist, queue_size=5)
         rospy.Subscriber("odometry/filtered", Odometry, self.updateState)
         rospy.Subscriber("orientation", Quaternion, self.angularController.setTargetPosition)
         rospy.Subscriber("angular_velocity", Vector3, self.angularController.setTargetVelocity)
@@ -352,12 +358,9 @@ class ControllerNode:
         rospy.Subscriber("linear_velocity", Vector3, self.linearController.setTargetVelocity)
         rospy.Subscriber("disable_linear", Empty, self.linearController.disable)
         rospy.Subscriber("off", Empty, self.turnOff)
-        self.forcePub = rospy.Publisher("net_force", Twist, queue_size=5)
-        self.accelPub = rospy.Publisher("~requested_accel", Twist, queue_size=5)
+        
 
-        self.lastTorque = None
-        self.lastForce = None
-        self.off = True
+        
 
         self.reconfigure_server = Server(NewControllerConfig, self.dynamicReconfigureCb)      
         # set default values in dynamic reconfig  

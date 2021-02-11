@@ -40,6 +40,7 @@
   <run_depend>dynamic_reconfigure</run_depend>
   <run_depend>control_toolbox</run_depend>
   <run_depend>tf</run_depend>
+  <run_depend>python-scipy</run_depend>
 
   <export>
   </export>

@@ -15,13 +15,17 @@
 
 import rospy
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float32MultiArray, Int16MultiArray
 import numpy as np
 import yaml
 from tf.transformations import euler_matrix
 from tf import TransformListener
 from scipy.optimize import minimize
 
+
+NEUTRAL_PWM = 1500
+MIN_PWM = 1230
+MAX_PWM = 1770
 
 def msg_to_numpy(msg):
     return np.array([msg.x, msg.y, msg.z])
@@ -32,6 +36,7 @@ class ThrusterSolverNode:
         rospy.Subscriber("net_force", Twist, self.force_cb)
 
         self.thruster_pub = rospy.Publisher("thruster_forces", Float32MultiArray, queue_size=5)
+        self.pwm_pub = rospy.Publisher("command/pwm", Int16MultiArray, queue_size=5)
         self.tf_namespace = rospy.get_param("~robot")
 
         # Load thruster info
@@ -41,8 +46,10 @@ class ThrusterSolverNode:
 
         thruster_info = config_file['thrusters']
         self.thruster_coeffs = np.zeros((len(thruster_info), 6))
+        self.thruster_types = np.zeros(len(thruster_info))
         com = np.array(config_file["com"])
         self.max_force = config_file["thruster"]["max_force"]
+        self.pwm_force = config_file["thruster"]
 
         for i, thruster in enumerate(thruster_info):
             pose = np.array(thruster["pose"])
@@ -51,7 +58,9 @@ class ThrusterSolverNode:
             body_torque = np.cross(pose[:3]- com, body_force)
 
             self.thruster_coeffs[i, :3] = body_force
-            self.thruster_coeffs[i, 3:] = body_torque                   
+            self.thruster_coeffs[i, 3:] = body_torque   
+
+            self.thruster_types[i] = config_file["thrusters"][i]["type"]                
 
         self.initial_condition = []
         self.bounds = []
@@ -68,6 +77,48 @@ class ThrusterSolverNode:
         self.timer = rospy.Timer(rospy.Duration(0.1), self.check_thrusters)
         self.listener = TransformListener()
         self.WATER_LEVEL = 0
+
+    def publish_pwm(self, forces):
+        pwm_values = []
+
+        for i in range(self.thruster_coeffs.shape[0]):
+            pwm = NEUTRAL_PWM
+
+            if (abs(forces[i]) < self.pwm_file["MIN_THRUST"]):
+                pwm = NEUTRAL_PWM
+
+            elif (forces[i] > 0 and forces[i] <= self.pwm_file["STARTUP_THRUST"]):
+                if self.thruster_types[i] == 0:
+                    pwm = (int)(self.pwm_file["SU_THRUST"]["POS_SLOPE"] * forces[i] + self.pwm_file["SU_THRUST"]["POS_YINT"])
+                else:
+                    pwm = (int)(-self.pwm_file["SU_THRUST"]["POS_SLOPE"] * forces[i] + self.pwm_file["SU_THRUST"]["NEG_YINT"])
+
+            elif (forces[i] > 0 and forces[i] > self.pwm_file["STARTUP_THRUST"]):
+                if self.thruster_types[i] == 0:
+                    pwm = (int)(self.pwm_file["THRUST"]["POS_SLOPE"] * forces[i] + self.pwm_file["THRUST"]["POS_YINT"])
+                else:
+                    pwm = (int)(-self.pwm_file["THRUST"]["POS_SLOPE"] * forces[i] + self.pwm_file["THRUST"]["NEG_YINT"])
+
+            elif (forces[i] < 0 and forces[i] >= -self.pwm_file["STARTUP_THRUST"]):
+                if self.thruster_types[i] == 0:
+                    pwm = (int)(self.pwm_file["SU_THRUST"]["NEG_SLOPE"] * forces[i] + self.pwm_file["SU_THRUST"]["NEG_YINT"])
+                else:
+                    pwm = (int)(-self.pwm_file["SU_THRUST"]["NEG_SLOPE"] * forces[i] + self.pwm_file["SU_THRUST"]["POS_YINT"])
+
+            elif (forces[i] < 0 and forces[i] < -self.pwm_file["STARTUP_THRUST"]):
+                if self.thruster_types[i] == 0:
+                    pwm = (int)(self.pwm_file["THRUST"]["NEG_SLOPE"] * forces[i] + self.pwm_file["THRUST"]["NEG_YINT"])
+                else:
+                    pwm = (int)(-self.pwm_file["THRUST"]["NEG_SLOPE"] * forces[i] + self.pwm_file["THRUST"]["POS_YINT"])
+
+            else:
+                pwm = NEUTRAL_PWM
+
+            pwm_values.append(pwm)
+
+        msg = Int16MultiArray()
+        msg.data = pwm_values
+        self.pwm_pub.publish(msg)
 
 
     # Timer callback which disables thrusters that are out of the water
