@@ -3,12 +3,10 @@ import rospy
 import riptide_controllers.msg
 import actionlib
 from trajectory_msgs.msg import MultiDOFJointTrajectory, MultiDOFJointTrajectoryPoint
-from geometry_msgs.msg import Transform, Quaternion, Vector3, Twist, PoseStamped
-from moveit_msgs.msg import ExecuteTrajectoryActionGoal, ExecuteTrajectoryGoal
+from geometry_msgs.msg import Transform, Quaternion, Vector3, PoseStamped
+from moveit_msgs.msg import ExecuteTrajectoryActionGoal
 from nav_msgs.msg import Path, Odometry
-from actionlib_msgs.msg import GoalStatus
 import numpy as np
-import time
 from tf.transformations import quaternion_multiply, quaternion_inverse, quaternion_from_euler
 import os
 import csv
