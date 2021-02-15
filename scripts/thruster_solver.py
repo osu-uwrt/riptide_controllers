@@ -49,7 +49,7 @@ class ThrusterSolverNode:
         self.thruster_types = np.zeros(len(thruster_info))
         com = np.array(config_file["com"])
         self.max_force = config_file["thruster"]["max_force"]
-        self.pwm_force = config_file["thruster"]
+        self.pwm_file = config_file["thruster"]
 
         for i, thruster in enumerate(thruster_info):
             pose = np.array(thruster["pose"])
@@ -60,7 +60,9 @@ class ThrusterSolverNode:
             self.thruster_coeffs[i, :3] = body_force
             self.thruster_coeffs[i, 3:] = body_torque   
 
-            self.thruster_types[i] = config_file["thrusters"][i]["type"]                
+            self.thruster_types[i] = config_file["thrusters"][i]["type"]   
+
+
 
         self.initial_condition = []
         self.bounds = []
@@ -179,6 +181,8 @@ class ThrusterSolverNode:
 
         msg = Float32MultiArray()
         msg.data = res.x        
+
+        self.publish_pwm(res.x)
 
         self.thruster_pub.publish(msg)
 
