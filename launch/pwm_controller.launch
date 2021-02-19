@@ -1,7 +1,0 @@
-<launch>
-  <param name="vehicle_file" type="string" value="$(find riptide_descriptions)/config/puddles.yaml" />
-  
-  <node pkg="riptide_controllers" type="pwm_controller" name="pwm_controller" output="screen" >
-    <rosparam command="load" file="$(find riptide_controllers)/cfg/thruster_force_vs_pwm.yaml" />
-  </node>
-</launch>

@@ -1,0 +1,8 @@
+<launch>
+  <arg name="robot" default="puddles" doc="Name of the vehicle" />
+
+  <node pkg="riptide_controllers" type="scriptOhio.py" name="script_ohio" output="screen" ns="puddles"/>
+
+  <node pkg="riptide_moveit_config" type="moveit_translator.py" name="moveit_translator" output="screen" />
+  
+</launch>
