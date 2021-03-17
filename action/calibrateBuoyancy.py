@@ -80,9 +80,11 @@ class CalibrateBuoyancyAction(object):
 
         # Submerge
         odom_msg = rospy.wait_for_message("odometry/filtered", Odometry)
-        current_position = odom_msg.pose.pose.position
-        self.position_pub.publish(Vector3(current_position.x, current_position.y, -1.5))
-        self.orientation_pub.publish(Quaternion(0, 0, 0, 1))
+        current_position = msg_to_numpy(odom_msg.pose.pose.position)
+        current_orientation = msg_to_numpy(odom_msg.pose.pose.orientation)
+        self.position_pub.publish(Vector3(current_position[0], current_position[1], -1.5))
+        _, _, y = euler_from_quaternion(current_orientation)
+        self.orientation_pub.publish(Quaternion(*quaternion_from_euler(0, 0, y)))
 
         # Wait for equilibrium
         rospy.sleep(10)

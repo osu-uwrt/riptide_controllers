@@ -23,6 +23,7 @@ add_action_files(
   ThrusterTest.action
   FollowTrajectory.action
   ScriptOhio.action
+  ShroudTest.action
 )
 
 generate_messages(
