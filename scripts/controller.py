@@ -389,7 +389,7 @@ class ControllerNode:
             "quadratic_rot_x": config["quadratic_damping"][3],
             "quadratic_rot_y": config["quadratic_damping"][4],
             "quadratic_rot_z": config["quadratic_damping"][5],
-            "force": self.accelerationCalculator.density * self.accelerationCalculator.gravity * config["volume"],
+            "volume": config["volume"],
             "center_x": config['cob'][0],
             "center_y": config['cob'][1],
             "center_z": config['cob'][2],            
@@ -471,7 +471,7 @@ class ControllerNode:
         self.angularController.maxAccel[1] = config["max_angular_accel_y"]
         self.angularController.maxAccel[2] = config["max_angular_accel_z"]
 
-        self.accelerationCalculator.buoyancy = np.array([0, 0, config["force"] ])
+        self.accelerationCalculator.buoyancy = np.array([0, 0, config["volume"] * self.accelerationCalculator.density * self.accelerationCalculator.gravity  ])
         self.accelerationCalculator.cob[0] = config["center_x"]
         self.accelerationCalculator.cob[1] = config["center_y"]
         self.accelerationCalculator.cob[2] = config["center_z"]

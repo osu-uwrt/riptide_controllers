@@ -1,4 +1,8 @@
 #! /usr/bin/env python
+
+# Determines the buoyancy parameter of the robot.
+# Assumes the robot is upright
+
 import rospy
 import actionlib
 import dynamic_reconfigure.client
@@ -51,12 +55,12 @@ class CalibrateBuoyancyAction(object):
             
 
         rospy.loginfo("Starting buoyancy calibration")
-        buoyant_force = self.mass * GRAVITY
+        volume = self.mass / WATER_DENSITY
         cob = self.com
 
         # Reset parameters to default
         self.client.update_configuration({
-            "force": buoyant_force, 
+            "volume": volume, 
             "center_x": cob[0], 
             "center_y": cob[1], 
             "center_z": cob[2],
@@ -81,27 +85,33 @@ class CalibrateBuoyancyAction(object):
         self.orientation_pub.publish(Quaternion(0, 0, 0, 1))
 
         # Wait for equilibrium
-        rospy.sleep(15)
+        rospy.sleep(10)
 
-        # Average 10 samples
-        force_measurements = []
-        for _ in range(10):
-            force_msg = self.mass * msg_to_numpy(rospy.wait_for_message("controller/requested_accel", Twist).linear)
-            force = np.linalg.norm(force_msg)
-            if force_msg[2] < 0:
-                force *= -1
+        # Do this 3 times
+        for _ in range (3):
+            # Wait for equilibrium
+            rospy.sleep(5)
 
-            rospy.sleep(0.2)
-            force_measurements.append(force)
+            # Average 10 samples
+            force_measurements = []
+            for _ in range(10):
+                force_msg = self.mass * msg_to_numpy(rospy.wait_for_message("controller/requested_accel", Twist).linear)
+                force = np.linalg.norm(force_msg)
+                if force_msg[2] < 0:
+                    force *= -1
 
-        # Adjust buoyant force
-        buoyant_force -= np.average(force_measurements)
-        self.client.update_configuration({"force": buoyant_force})
+                rospy.sleep(0.2)
+                force_measurements.append(force)
 
-        if self.check_preempted():
-            return
+            # Adjust volume
+            volume -= np.average(force_measurements) / WATER_DENSITY / GRAVITY
+            self.client.update_configuration({"volume": volume})
 
-        rospy.loginfo("Buoyant force calibration complete")
+            if self.check_preempted():
+                return
+
+        rospy.loginfo("Volume calibration complete")
+        buoyant_force = volume * WATER_DENSITY * GRAVITY
 
         # Adjust COB until converged
         last_adjustment_x = 0
