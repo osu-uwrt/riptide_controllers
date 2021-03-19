@@ -177,7 +177,7 @@ class ThrusterSolverNode:
 
         # Warn if we did not find valid thruster forces
         if self.force_cost(res.x, desired_state) > 0.05:
-            rospy.logwarn("Unable to exert requested force")
+            rospy.logwarn_throttle(1, "Unable to exert requested force")
 
         msg = Float32MultiArray()
         msg.data = res.x        
