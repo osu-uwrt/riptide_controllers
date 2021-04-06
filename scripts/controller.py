@@ -383,9 +383,9 @@ class ControllerNode:
         self.lastForce = None
         self.off = True
 
-        self.forcePub = rospy.Publisher("net_force", Twist, queue_size=5)
-        self.steadyPub = rospy.Publisher("steady", Bool, queue_size=5)
-        self.accelPub = rospy.Publisher("~requested_accel", Twist, queue_size=5)
+        self.forcePub = rospy.Publisher("net_force", Twist, queue_size=1)
+        self.steadyPub = rospy.Publisher("steady", Bool, queue_size=1)
+        self.accelPub = rospy.Publisher("~requested_accel", Twist, queue_size=1)
         rospy.Subscriber("odometry/filtered", Odometry, self.updateState)
         rospy.Subscriber("orientation", Quaternion, self.angularController.setTargetPosition)
         rospy.Subscriber("angular_velocity", Vector3, self.angularController.setTargetVelocity)
@@ -394,7 +394,7 @@ class ControllerNode:
         rospy.Subscriber("linear_velocity", Vector3, self.linearController.setTargetVelocity)
         rospy.Subscriber("disable_linear", Empty, self.linearController.disable)
         rospy.Subscriber("off", Empty, self.turnOff)
-        rospy.Subscriber("/state/switches", SwitchState, self.switch_cb)
+        rospy.Subscriber("state/switches", SwitchState, self.switch_cb)
         
 
         
@@ -525,6 +525,7 @@ class ControllerNode:
     def switch_cb(self, msg):
         if not msg.kill:
             self.turnOff()
+        pass
 
 
 if __name__ == '__main__':

@@ -33,7 +33,7 @@ def msg_to_numpy(msg):
 class ThrusterSolverNode:
 
     def __init__(self):
-        rospy.Subscriber("net_force", Twist, self.force_cb)
+        rospy.Subscriber("net_force", Twist, self.force_cb, queue_size=1)
 
         self.thruster_pub = rospy.Publisher("thruster_forces", Float32MultiArray, queue_size=5)
         self.pwm_pub = rospy.Publisher("command/pwm", Int16MultiArray, queue_size=5)
@@ -167,6 +167,8 @@ class ThrusterSolverNode:
         return total_cost_jac
 
     def force_cb(self, msg):
+        rospy.loginfo(msg.linear.x)
+        rospy.sleep(0.1)
         desired_state = np.zeros(6)
         desired_state[:3] = msg_to_numpy(msg.linear)
         desired_state[3:] = msg_to_numpy(msg.angular)
