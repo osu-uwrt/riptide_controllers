@@ -25,7 +25,8 @@
 import rospy
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, Vector3, Twist
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, Bool
+from riptide_msgs.msg import SwitchState
 from tf.transformations import quaternion_multiply, quaternion_inverse, quaternion_slerp
 import numpy as np
 from abc import ABCMeta, abstractmethod
@@ -60,6 +61,28 @@ def worldToBody(orientation, vector):
     newVector = quaternion_multiply(orientationInv, quaternion_multiply(vector, orientation))
     return newVector[:3]
 
+def applyMax(vector, max_vector):
+    """ 
+    Scales a vector to obey maximums
+
+    Parameters:
+    vector (np.array): The unscaled vector
+    max_vector (np.array): The maximum values for each element
+
+    Returns: 
+    np.array: Vector that obeys the maximums
+
+    """
+
+    scale = 1
+    for i in range(len(vector)):
+        if abs(vector[i]) > max_vector[i]:
+            element_scale = max_vector[i] / abs(vector[i])
+            if element_scale < scale:
+                scale = element_scale
+
+    return vector * scale
+
 
 class CascadedPController:
     __metaclass__ = ABCMeta
@@ -72,6 +95,9 @@ class CascadedPController:
         self.velocityP = np.zeros(3)
         self.maxVelocity = np.zeros(3)
         self.maxAccel = np.zeros(3)
+        self.steadyVelThresh = 0.00001
+        self.steadyAccelThresh = 0.00001
+        self.steady = True
 
     @abstractmethod
     def computeCorrectiveVelocity(self, odom):
@@ -173,9 +199,16 @@ class CascadedPController:
         if self.targetAcceleration is not None:
             netAccel += self.targetAcceleration
 
-        for i in range(3):
-            if abs(netAccel[i]) > self.maxAccel[i]:
-                netAccel[i] = self.maxAccel[i] * netAccel[i] / abs(netAccel[i])
+        netAccel = applyMax(netAccel, self.maxAccel)
+        
+        if self.targetAcceleration is not None:                         # Trajectory mode
+            self.steady = False
+        elif self.targetPosition is not None:                           # Position mode
+            self.steady = np.allclose(correctiveVelocity, np.zeros(3), atol=self.steadyVelThresh)
+        elif self.targetVelocity is not None:                           # Velocity mode
+            self.steady = np.allclose(netAccel, np.zeros(3), atol=self.steadyAccelThresh)
+        else:
+            self.steady = True
 
         return netAccel
 
@@ -183,6 +216,8 @@ class LinearCascadedPController(CascadedPController):
 
     def __init__(self):
         super(LinearCascadedPController, self).__init__()
+        self.steadyVelThresh = 0.02
+        self.steadyAccelThresh = 0.02
 
     def computeCorrectiveVelocity(self, odom):
 
@@ -198,9 +233,7 @@ class LinearCascadedPController(CascadedPController):
 
         if self.targetVelocity is not None:          
             targetVelocity = self.targetVelocity + correctiveVelocity
-            for i in range(3):
-                if abs(targetVelocity[i]) > self.maxVelocity[i]:
-                    targetVelocity[i] = self.maxVelocity[i] * targetVelocity[i] / abs(targetVelocity[i])  
+            targetVelocity = applyMax(targetVelocity, self.maxVelocity)
             currentVelocity = msgToNumpy(odom.twist.twist.linear)
             outputAccel = (targetVelocity - currentVelocity) * self.velocityP
             return outputAccel       
@@ -211,6 +244,8 @@ class AngularCascadedPController(CascadedPController):
 
     def __init__(self):
         super(AngularCascadedPController, self).__init__()
+        self.steadyVelThresh = 0.1
+        self.steadyAccelThresh = 0.1
 
     def computeCorrectiveVelocity(self, odom):
 
@@ -348,8 +383,9 @@ class ControllerNode:
         self.lastForce = None
         self.off = True
 
-        self.forcePub = rospy.Publisher("net_force", Twist, queue_size=5)
-        self.accelPub = rospy.Publisher("~requested_accel", Twist, queue_size=5)
+        self.forcePub = rospy.Publisher("net_force", Twist, queue_size=1)
+        self.steadyPub = rospy.Publisher("steady", Bool, queue_size=1)
+        self.accelPub = rospy.Publisher("~requested_accel", Twist, queue_size=1)
         rospy.Subscriber("odometry/filtered", Odometry, self.updateState)
         rospy.Subscriber("orientation", Quaternion, self.angularController.setTargetPosition)
         rospy.Subscriber("angular_velocity", Vector3, self.angularController.setTargetVelocity)
@@ -358,6 +394,7 @@ class ControllerNode:
         rospy.Subscriber("linear_velocity", Vector3, self.linearController.setTargetVelocity)
         rospy.Subscriber("disable_linear", Empty, self.linearController.disable)
         rospy.Subscriber("off", Empty, self.turnOff)
+        rospy.Subscriber("state/switches", SwitchState, self.switch_cb)
         
 
         
@@ -389,7 +426,7 @@ class ControllerNode:
             "quadratic_rot_x": config["quadratic_damping"][3],
             "quadratic_rot_y": config["quadratic_damping"][4],
             "quadratic_rot_z": config["quadratic_damping"][5],
-            "force": self.accelerationCalculator.density * self.accelerationCalculator.gravity * config["volume"],
+            "volume": config["volume"],
             "center_x": config['cob'][0],
             "center_y": config['cob'][1],
             "center_z": config['cob'][2],            
@@ -420,6 +457,8 @@ class ControllerNode:
             netForce, netTorque = self.accelerationCalculator.accelToNetForce(odomMsg, linearAccel, angularAccel)
         else:
             netForce, netTorque = np.zeros(3), np.zeros(3)
+
+        self.steadyPub.publish(self.linearController.steady and self.angularController.steady)
 
         if not np.array_equal(self.lastTorque, netTorque) or \
            not np.array_equal(self.lastForce, netForce):
@@ -471,7 +510,7 @@ class ControllerNode:
         self.angularController.maxAccel[1] = config["max_angular_accel_y"]
         self.angularController.maxAccel[2] = config["max_angular_accel_z"]
 
-        self.accelerationCalculator.buoyancy = np.array([0, 0, config["force"] ])
+        self.accelerationCalculator.buoyancy = np.array([0, 0, config["volume"] * self.accelerationCalculator.density * self.accelerationCalculator.gravity  ])
         self.accelerationCalculator.cob[0] = config["center_x"]
         self.accelerationCalculator.cob[1] = config["center_y"]
         self.accelerationCalculator.cob[2] = config["center_z"]
@@ -482,6 +521,11 @@ class ControllerNode:
         self.angularController.disable()
         self.linearController.disable()
         self.off = True
+
+    def switch_cb(self, msg):
+        if not msg.kill:
+            self.turnOff()
+        pass
 
 
 if __name__ == '__main__':
