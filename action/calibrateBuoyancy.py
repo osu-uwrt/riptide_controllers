@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 # Determines the buoyancy parameter of the robot.
 # Assumes the robot is upright

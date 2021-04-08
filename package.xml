@@ -19,17 +19,11 @@
 
   <build_depend>rostest</build_depend>
   <build_depend>actionlib_msgs</build_depend>
-  <build_depend>libceres-dev</build_depend>
-  <build_depend>eigen</build_depend>
   <build_depend>geometry_msgs</build_depend>
-  <build_depend>imu_3dm_gx4</build_depend>
   <build_depend>riptide_msgs</build_depend>
-  <build_depend>roscpp</build_depend>
-  <build_depend>roslint</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>trajectory_msgs</build_depend>
   <build_depend>dynamic_reconfigure</build_depend>
-  <build_depend>control_toolbox</build_depend>
   <build_depend>tf2_geometry_msgs</build_depend>
 
   <run_depend>actionlib_msgs</run_depend>
@@ -38,9 +32,8 @@
   <run_depend>roslaunch</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>dynamic_reconfigure</run_depend>
-  <run_depend>control_toolbox</run_depend>
   <run_depend>tf</run_depend>
-  <run_depend>python-scipy</run_depend>
+  <run_depend>python3-scipy</run_depend>
 
   <export>
   </export>
