@@ -167,8 +167,6 @@ class ThrusterSolverNode:
         return total_cost_jac
 
     def force_cb(self, msg):
-        rospy.loginfo(msg.linear.x)
-        rospy.sleep(0.1)
         desired_state = np.zeros(6)
         desired_state[:3] = msg_to_numpy(msg.linear)
         desired_state[3:] = msg_to_numpy(msg.angular)
