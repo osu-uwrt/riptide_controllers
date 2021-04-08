@@ -24,6 +24,7 @@ class CalibrateDragAction(object):
 
     def __init__(self):
         self.orientation_pub = rospy.Publisher("orientation", Quaternion, queue_size=5)
+        self.position_pub = rospy.Publisher("position", Vector3, queue_size=5)
         self.lin_vel_pub = rospy.Publisher("linear_velocity", Vector3, queue_size=5)
         self.ang_vel_pub = rospy.Publisher("angular_velocity", Vector3, queue_size=5)
 
@@ -147,7 +148,8 @@ class CalibrateDragAction(object):
 
         # Initialize starting position of robot
         odom_msg = rospy.wait_for_message("odometry/filtered", Odometry)
-        startY = self.get_euler(odom_msg)[2] * 180 / pi
+        startYaw = self.get_euler(odom_msg)[2] * 180 / pi
+        startPosition = odom_msg.pose.pose.position
         rospy.loginfo("Starting drag calibration")
 
         linear_params = np.zeros(6)
@@ -155,12 +157,12 @@ class CalibrateDragAction(object):
 
         # Euler for ease of use
         axes_test_orientations = [
-            [0, 0, startY],
-            [0, 0, self.restrict_angle(startY - 90)],
-            [0, -85, startY],
-            [0, -85, startY],
-            [90, 0, startY],
-            [0, 0, startY]
+            [0, 0, startYaw],
+            [0, 0, self.restrict_angle(startYaw - 90)],
+            [0, -85, startYaw],
+            [0, -85, startYaw],
+            [90, 0, startYaw],
+            [0, 0, startYaw]
         ]
 
         axis_velocities = [
@@ -173,6 +175,7 @@ class CalibrateDragAction(object):
         ]
 
         for axis in range(6):
+            self.position_pub.publish(startPosition)
             self.to_orientation(*axes_test_orientations[axis])
 
             forces = []
@@ -186,7 +189,7 @@ class CalibrateDragAction(object):
             rospy.loginfo("Linear: %f" % linear_params[axis])
             rospy.loginfo("Quadratic: %f" % quadratic_params[axis])
 
-        self.to_orientation(0, 0, startY)
+        self.to_orientation(0, 0, startYaw)
 
         rospy.loginfo("Drag calibration completed.")
 
