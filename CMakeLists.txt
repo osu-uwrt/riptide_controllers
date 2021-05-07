@@ -23,6 +23,7 @@ add_action_files(
   ThrusterTest.action
   FollowTrajectory.action
   ScriptOhio.action
+  SickTrick.action
   ShroudTest.action
 )
 

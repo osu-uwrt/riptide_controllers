@@ -7,4 +7,7 @@
 	<include file="$(find riptide_controllers)/launch/actions.launch">
 		<arg name="robot" value="$(arg robot)" />
 	</include>
+
+	<node pkg="riptide_controllers" type="sickTrick.py" name="sick_trick" output="screen"/>
+  	<node pkg="riptide_navigation" type="moveit_translator.py" name="moveit_translator" output="screen" />
 </launch>
