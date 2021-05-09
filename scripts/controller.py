@@ -26,7 +26,6 @@ import rospy
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, Vector3, Twist
 from std_msgs.msg import Empty, Bool
-from riptide_msgs.msg import SwitchState
 from tf.transformations import quaternion_multiply, quaternion_inverse, quaternion_slerp
 import numpy as np
 from abc import ABCMeta, abstractmethod
@@ -394,7 +393,7 @@ class ControllerNode:
         rospy.Subscriber("linear_velocity", Vector3, self.linearController.setTargetVelocity)
         rospy.Subscriber("disable_linear", Empty, self.linearController.disable)
         rospy.Subscriber("off", Empty, self.turnOff)
-        rospy.Subscriber("state/switches", SwitchState, self.switch_cb)
+        rospy.Subscriber("state/kill_switch", Bool, self.switch_cb)
         
 
         
@@ -523,7 +522,7 @@ class ControllerNode:
         self.off = True
 
     def switch_cb(self, msg):
-        if not msg.kill:
+        if not msg.data:
             self.turnOff()
         pass
 

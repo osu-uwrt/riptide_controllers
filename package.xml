@@ -20,7 +20,6 @@
   <build_depend>rostest</build_depend>
   <build_depend>actionlib_msgs</build_depend>
   <build_depend>geometry_msgs</build_depend>
-  <build_depend>riptide_msgs</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>trajectory_msgs</build_depend>
   <build_depend>dynamic_reconfigure</build_depend>
@@ -28,7 +27,6 @@
 
   <run_depend>actionlib_msgs</run_depend>
   <run_depend>geometry_msgs</run_depend>
-  <run_depend>riptide_msgs</run_depend>
   <run_depend>roslaunch</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>dynamic_reconfigure</run_depend>
