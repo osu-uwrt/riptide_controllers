@@ -30,7 +30,7 @@ class ThrusterTest(object):
 
     def publish_pwm(self, pwm):
         msg = Int16MultiArray()
-        msg.data = pwm
+        msg.data = list(pwm.astype(int))
         self.pwm_pub.publish(msg)
 
     def execute_cb(self, goal):
