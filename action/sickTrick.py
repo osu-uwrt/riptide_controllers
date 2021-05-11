@@ -41,7 +41,7 @@ def body_2_world(orientation, vector):
 class SickTrickAction(object):
 
     def __init__(self):
-        self.trajectory_pub = rospy.Publisher("/execute_trajectory/goal/", ExecuteTrajectoryActionGoal, queue_size=1)
+        self.trajectory_pub = rospy.Publisher("execute_trajectory/goal/", ExecuteTrajectoryActionGoal, queue_size=1)
         self.position_pub = rospy.Publisher("position", Vector3, queue_size=1)
         self.orientation_pub = rospy.Publisher("orientation", Quaternion, queue_size=1)
         self.path_pub = rospy.Publisher("sick_trick_path", Path, queue_size=1)
@@ -56,7 +56,7 @@ class SickTrickAction(object):
     def input_2_world(self, input_point, input_orientation, position, orientation):
         body_frame_position = np.array([input_point[0] - self.middle_x, input_point[1] - self.middle_y, input_point[2] - self.middle_z])
         world_frame_position = body_2_world(orientation, body_frame_position) + position
-        world_frame_orientation = quaternion_multiply(input_orientation, orientation)
+        world_frame_orientation = quaternion_multiply(orientation, input_orientation)
 
         return world_frame_position, world_frame_orientation
 
@@ -64,7 +64,6 @@ class SickTrickAction(object):
     def execute_cb(self, goal):
 
         PATH = "~/osu-uwrt/riptide_software/src/riptide_controllers/cfg/%s.csv" % goal.trick
-        rospy.loginfo(PATH)
 
         self.points = []
         
@@ -74,7 +73,6 @@ class SickTrickAction(object):
                 self.points.append(list(map(float, row)))
 
         self.points = np.array(self.points)
-        rospy.loginfo(self.points.shape)
 
         
         self.min_x = np.min(self.points[:,0])

@@ -51,9 +51,9 @@ class ThrusterTest(object):
                 else:
                     pwm[i] = NEGATIVE_PWM
 
-                for _ in range(3000):
+                for _ in range(30):
                     self.publish_pwm(pwm)
-                    rospy.sleep(0.001)
+                    rospy.sleep(0.1)
                 pwm[i] = NEUTRAL_PWM
 
             

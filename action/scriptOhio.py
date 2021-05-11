@@ -41,7 +41,7 @@ def body_2_world(orientation, vector):
 class ScriptOhioAction(object):
 
     def __init__(self):
-        self.trajectory_pub = rospy.Publisher("/execute_trajectory/goal/", ExecuteTrajectoryActionGoal, queue_size=1)
+        self.trajectory_pub = rospy.Publisher("execute_trajectory/goal/", ExecuteTrajectoryActionGoal, queue_size=1)
         self.position_pub = rospy.Publisher("position", Vector3, queue_size=1)
         self.orientation_pub = rospy.Publisher("orientation", Quaternion, queue_size=1)
         self.path_pub = rospy.Publisher("script_ohio_path", Path, queue_size=1)

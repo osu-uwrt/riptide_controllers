@@ -130,7 +130,7 @@ class ThrusterSolverNode:
                 self.start_time = rospy.get_rostime()
             self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
             for i in range(self.thruster_coeffs.shape[0]):
-                trans, _ = self.listener.lookupTransform("/world", "/%s/thruster_%d" % (self.tf_namespace, i), rospy.Time(0))      
+                trans, _ = self.listener.lookupTransform("world", "%s/thruster_%d" % (self.tf_namespace, i), rospy.Time(0))      
                 if trans[2] > self.WATER_LEVEL:
                     self.current_thruster_coeffs[i, :] = 0
         except Exception as ex:
