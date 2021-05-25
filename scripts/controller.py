@@ -28,7 +28,7 @@ from geometry_msgs.msg import Quaternion, Vector3, Twist
 from std_msgs.msg import Empty, Bool
 from tf.transformations import quaternion_multiply, quaternion_inverse, quaternion_slerp
 import numpy as np
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 import yaml
 from dynamic_reconfigure.server import Server
 from riptide_controllers.cfg import NewControllerConfig
@@ -83,8 +83,7 @@ def applyMax(vector, max_vector):
     return vector * scale
 
 
-class CascadedPController:
-    __metaclass__ = ABCMeta
+class CascadedPController(ABC):
 
     def __init__(self):
         self.targetPosition = None

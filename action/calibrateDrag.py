@@ -3,16 +3,13 @@ import rospy
 import actionlib
 import yaml
 
-import dynamic_reconfigure.client
 import riptide_controllers.msg
 from nav_msgs.msg import Odometry
-from std_msgs.msg import Float64, Header
-from geometry_msgs.msg import Quaternion, Vector3Stamped, Vector3, Twist
-from dynamic_reconfigure.server import Server
+from geometry_msgs.msg import Quaternion, Vector3, Twist
 from dynamic_reconfigure.client import Client
 
-from tf.transformations import euler_from_quaternion, quaternion_multiply, quaternion_inverse, quaternion_from_euler
-from math import sin, cos, tan, acos, pi
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from math import pi
 import numpy as np
 
 # Z axis is a little off, load interia from puddles.yaml, and update dynamic reconfigure

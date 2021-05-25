@@ -59,7 +59,7 @@ class ScriptOhioAction(object):
         with open(os.path.expanduser(PATH), "r") as csvfile:
             spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')
             for row in spamreader:
-                self.points.append(map(int, map(float, row)))
+                self.points.append(list(map(int, map(float, row))))
 
         self.points = np.array(self.points)
         self.points *= np.array([1, -1])
