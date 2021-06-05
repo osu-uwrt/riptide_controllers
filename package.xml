@@ -4,11 +4,14 @@
   <version>0.0.1</version>
   <description>Package to store all code relating to the control of OSU's AUV.</description>
 
+  <author>Blaine Miller</author>
+  <author>Mitchell Sayre</author>
   <maintainer email="osu.uwrt@gmail.com">OSU UWRT</maintainer>
 
   <license>BSD</license>
 
   <url type="repository">https://github.com/osu-uwrt/riptide_controllers</url>
+  <url type="website">http://wiki.ros.org/riptide_controllers</url>
 
   <buildtool_depend>catkin</buildtool_depend>
 
