@@ -1,5 +1,5 @@
 <launch>
-    <arg name="robot" default="puddles" doc="Name of the vehicle" />
+    <arg name="robot" default="tempest" doc="Name of the vehicle" />
 
     <node pkg="riptide_controllers" type="controller.py" name="controller" output="screen">
         <param name="vehicle_config" value="$(find riptide_descriptions)/config/$(arg robot).yaml" />

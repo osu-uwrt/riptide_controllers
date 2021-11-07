@@ -1,5 +1,5 @@
 <launch>
-	<arg name="robot" default="puddles" doc="Name of the vehicle" />
+	<arg name="robot" default="tempest" doc="Name of the vehicle" />
 
 	<include file="$(find riptide_controllers)/launch/new_controller.launch">
 		<arg name="robot" value="$(arg robot)" />
