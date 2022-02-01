@@ -1,46 +1,53 @@
 <?xml version="1.0"?>
-<package>
-  <name>riptide_controllers</name>
-  <version>0.0.17</version>
-  <description>Controllers for OSU's Riptide AUV.</description>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>riptide_controllers2</name>
+  <version>0.0.1</version>
+  <description>Package to store all code relating to the control of OSU's AUV.</description>
 
-  <maintainer email="justice.251@osu.edu">Benji Justice</maintainer>
+  <maintainer email="osu.uwrt@gmail.com">OSU UWRT</maintainer>
 
   <license>BSD</license>
 
-  <url type="website">http://go.osu.edu/uwrt</url>
-  <url type="repository">http://github.com/osu-uwrt/riptide</url>
+  <url type="repository">https://github.com/osu-uwrt/riptide_controllers</url>
+  <url type="website">http://wiki.ros.org/riptide_controllers</url>
 
-  <author email="justice.251@osu.edu">Benji Justice</author>
-  <author email="cary.42@osu.edu">Conor Cary</author>
-  <author email="mahaffey.60@osu.edu">Sara Mahaffey</author>
-
-  <buildtool_depend>catkin</buildtool_depend>
+  <author>Blaine Miller</author>
+  <author>Mitchell Sayre</author>
 
   <build_depend>rostest</build_depend>
   <build_depend>actionlib_msgs</build_depend>
   <build_depend>libceres-dev</build_depend>
   <build_depend>eigen</build_depend>
-  <build_depend>geometry_msgs</build_depend>
+  <!-- <build_depend>geometry_msgs</build_depend> -->
   <build_depend>imu_3dm_gx4</build_depend>
   <build_depend>riptide_msgs</build_depend>
-  <build_depend>roscpp</build_depend>
+  <build_depend>rclcpp</build_depend>
   <build_depend>roslint</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>dynamic_reconfigure</build_depend>
   <build_depend>control_toolbox</build_depend>
   <build_depend>tf2_geometry_msgs</build_depend>
 
-  <run_depend>actionlib_msgs</run_depend>
-  <run_depend>geometry_msgs</run_depend>
-  <run_depend>riptide_msgs</run_depend>
-  <run_depend>roslaunch</run_depend>
-  <run_depend>sensor_msgs</run_depend>
-  <run_depend>dynamic_reconfigure</run_depend>
-  <run_depend>control_toolbox</run_depend>
-  <run_depend>tf</run_depend>
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
 
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>roslaunch</exec_depend>
+  <exec_depend>actionlib_msgs</exec_depend>
+  <!-- <exec_depend>geometry_msgs</exec_depend> -->
+  <exec_depend>riptide_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>dynamic_reconfigure</exec_depend>
+  <exec_depend>control_toolbox</exec_depend>
+  <!-- <exec_depend>tf</exec_depend> -->
+  <exec_depend>tf2</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>tf_transformations</exec_depend>
+  
   <export>
+    <build_type>ament_python</build_type>
   </export>
-
 </package>

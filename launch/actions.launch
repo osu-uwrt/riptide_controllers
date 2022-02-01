@@ -1,16 +1,17 @@
 <launch>
-  <param name="vehicle_file" type="string" value="$(find riptide_descriptions)/config/puddles.yaml" />
-  <node pkg="riptide_controllers" type="calibrate.py" name="calibrate" output="screen" />
-  <node pkg="riptide_controllers" type="goToDepth.py" name="go_to_depth" output="screen" />
-  <node pkg="riptide_controllers" type="goToRoll.py" name="go_to_roll" output="screen" />
-  <node pkg="riptide_controllers" type="goToPitch.py" name="go_to_pitch" output="screen" />
-  <node pkg="riptide_controllers" type="goToYaw.py" name="go_to_yaw" output="screen" />
-  <node pkg="riptide_controllers" type="wait.py" name="wait" output="screen" />
-  <node pkg="riptide_controllers" type="gateManeuver.py" name="gate_maneuver" output="screen" />
-  <node pkg="riptide_controllers" type="arc.py" name="arc" output="screen" />
-  <node pkg="riptide_controllers" type="getDistance.py" name="get_distance" output="screen" />
-  <node pkg="riptide_controllers" type="align.py" name="align" output="screen" />
-  <node pkg="riptide_controllers" type="moveDistance.py" name="move_distance" output="screen" />
-  <node pkg="riptide_controllers" type="thrusterTest.py" name="thruster_test" output="screen" />  
+  <arg name="robot" default="puddles" doc="Name of the vehicle" />
+
+  <node pkg="riptide_controllers" type="calibrateBuoyancy.py" name="calibrate_buoyancy" output="screen">
+    <param name="vehicle_config" value="$(find riptide_descriptions)/config/$(arg robot).yaml" />
+  </node>
+  <node pkg="riptide_controllers" type="thrusterTest.py" name="thruster_test" output="screen">
+    <param name="vehicle_config" value="$(find riptide_descriptions)/config/$(arg robot).yaml" />
+  </node>  
+  <node pkg="riptide_controllers" type="calibrateDrag.py" name="calibrate_drag" output="screen">
+    <param name="vehicle_config" value="$(find riptide_descriptions)/config/$(arg robot).yaml" />
+  </node> 
+  <node pkg="riptide_controllers" type="shroudTest.py" name="shroud_test" output="screen">
+    <param name="vehicle_config" value="$(find riptide_descriptions)/config/$(arg robot).yaml" />
+  </node>  
   
 </launch>

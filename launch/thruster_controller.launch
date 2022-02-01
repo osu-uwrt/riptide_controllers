@@ -1,5 +1,0 @@
-<launch>
-  <param name="vehicle_file" type="string" value="$(find riptide_descriptions)/config/puddles.yaml" />
-
-  <node pkg="riptide_controllers" type="thruster_controller" name="thruster_controller" output="screen" />
-</launch>
