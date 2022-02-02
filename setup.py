@@ -24,7 +24,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'controller = riptide_controllers2.controller:main',
+            'controller = riptide_controllers2.controller_working:main',
             'thruster_solver = riptide_controllers2.thruster_solver:main',
         ],
     },

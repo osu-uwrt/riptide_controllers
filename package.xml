@@ -19,13 +19,12 @@
   <build_depend>actionlib_msgs</build_depend>
   <build_depend>libceres-dev</build_depend>
   <build_depend>eigen</build_depend>
-  <!-- <build_depend>geometry_msgs</build_depend> -->
+  <build_depend>geometry_msgs</build_depend>
   <build_depend>imu_3dm_gx4</build_depend>
   <build_depend>riptide_msgs</build_depend>
   <build_depend>rclcpp</build_depend>
   <build_depend>roslint</build_depend>
   <build_depend>sensor_msgs</build_depend>
-  <build_depend>dynamic_reconfigure</build_depend>
   <build_depend>control_toolbox</build_depend>
   <build_depend>tf2_geometry_msgs</build_depend>
 
@@ -37,15 +36,12 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>roslaunch</exec_depend>
   <exec_depend>actionlib_msgs</exec_depend>
-  <!-- <exec_depend>geometry_msgs</exec_depend> -->
+  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>riptide_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>dynamic_reconfigure</exec_depend>
   <exec_depend>control_toolbox</exec_depend>
-  <!-- <exec_depend>tf</exec_depend> -->
   <exec_depend>tf2</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
-  <exec_depend>tf_transformations</exec_depend>
   
   <export>
     <build_type>ament_python</build_type>
