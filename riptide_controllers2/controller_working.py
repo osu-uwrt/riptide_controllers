@@ -272,57 +272,57 @@ class AngularCascadedPController(CascadedPController):
         else:
             return np.zeros(3)
 
-# class AccelerationCalculator:
-#     def __init__(self, config):
-#         self.mass = np.array(config["mass"])
-#         self.com = np.array(config["com"])
-#         self.inertia = np.array(config["inertia"])
-#         self.linearDrag = np.zeros(6)
-#         self.quadraticDrag = np.zeros(6)
-#         self.volume = np.array(config["volume"])
-#         self.cob = np.zeros(3)
-#         self.gravity = 9.8 # (m/sec^2)
-#         self.density = 1000 # density of water (kg/m^3)
-#         self.buoyancy = np.zeros(3)
+class AccelerationCalculator:
+    def __init__(self, config):
+        self.mass = np.array(config["mass"])
+        self.com = np.array(config["com"])
+        self.inertia = np.array(config["inertia"])
+        self.linearDrag = np.zeros(6)
+        self.quadraticDrag = np.zeros(6)
+        self.volume = np.array(config["volume"])
+        self.cob = np.zeros(3)
+        self.gravity = 9.8 # (m/sec^2)
+        self.density = 1000 # density of water (kg/m^3)
+        self.buoyancy = np.zeros(3)
 
-#     def accelToNetForce(self, odom, linearAccel, angularAccel):
-#         """ 
-#         Converts vehicle acceleration into required net force.
+    def accelToNetForce(self, odom, linearAccel, angularAccel):
+        """ 
+        Converts vehicle acceleration into required net force.
     
-#         Will take the required acceleration and consider mass, buoyancy, drag, and precession to compute the required net force.
+        Will take the required acceleration and consider mass, buoyancy, drag, and precession to compute the required net force.
     
-#         Parameters:
-#         odom (Odometry): The latest odometry message.
-#         linearAccel (np.array): The linear body-frame acceleration.
-#         angularAccel (np.array): The angular body-frame acceleration.
+        Parameters:
+        odom (Odometry): The latest odometry message.
+        linearAccel (np.array): The linear body-frame acceleration.
+        angularAccel (np.array): The angular body-frame acceleration.
 
-#         Returns: 
-#         np.array: 3 dimensional vector representing net body-frame force.
-#         np.array: 3 dimensional vector representing net body-frame torque.
+        Returns: 
+        np.array: 3 dimensional vector representing net body-frame force.
+        np.array: 3 dimensional vector representing net body-frame torque.
 
-#         """
+        """
 
-#         linearVelo = msgToNumpy(odom.twist.twist.linear)
-#         angularVelo = msgToNumpy(odom.twist.twist.angular)
-#         orientation = msgToNumpy(odom.pose.pose.orientation)
+        linearVelo = msgToNumpy(odom.twist.twist.linear)
+        angularVelo = msgToNumpy(odom.twist.twist.angular)
+        orientation = msgToNumpy(odom.pose.pose.orientation)
 
-#         # Force & Torque Initialization
-#         netForce = linearAccel * self.mass
-#         netTorque = angularAccel * self.inertia
+        # Force & Torque Initialization
+        netForce = linearAccel * self.mass
+        netTorque = angularAccel * self.inertia
         
-#         # Forces and Torques Calculation
-#         bodyFrameBuoyancy = worldToBody(orientation, self.buoyancy)
-#         buoyancyTorque = np.cross((self.cob-self.com), bodyFrameBuoyancy)
-#         precessionTorque = -np.cross(angularVelo, (self.inertia * angularVelo))
-#         dragForce = self.linearDrag[:3] * linearVelo + self.quadraticDrag[:3] * abs(linearVelo) * linearVelo
-#         dragTorque = self.linearDrag[3:] * angularVelo + self.quadraticDrag[3:] * abs(angularVelo) * angularVelo
-#         gravityForce = worldToBody(orientation, np.array([0, 0, - self.gravity * self.mass]))
+        # Forces and Torques Calculation
+        bodyFrameBuoyancy = worldToBody(orientation, self.buoyancy)
+        buoyancyTorque = np.cross((self.cob-self.com), bodyFrameBuoyancy)
+        precessionTorque = -np.cross(angularVelo, (self.inertia * angularVelo))
+        dragForce = self.linearDrag[:3] * linearVelo + self.quadraticDrag[:3] * abs(linearVelo) * linearVelo
+        dragTorque = self.linearDrag[3:] * angularVelo + self.quadraticDrag[3:] * abs(angularVelo) * angularVelo
+        gravityForce = worldToBody(orientation, np.array([0, 0, - self.gravity * self.mass]))
                 
-#         # Net Calculation
-#         netForce = netForce - bodyFrameBuoyancy - dragForce - gravityForce
-#         netTorque = netTorque - buoyancyTorque - precessionTorque - dragTorque
+        # Net Calculation
+        netForce = netForce - bodyFrameBuoyancy - dragForce - gravityForce
+        netTorque = netTorque - buoyancyTorque - precessionTorque - dragTorque
 
-#         return netForce, netTorque
+        return netForce, netTorque
 
 # class TrajectoryReader:
 
