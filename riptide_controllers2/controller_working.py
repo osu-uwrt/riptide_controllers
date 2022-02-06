@@ -26,15 +26,18 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_system_default # can replace this with others
-from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Quaternion, Vector3, Twist
-from std_msgs.msg import Empty, Bool
+from rclpy.action import ActionServer
+
 import numpy as np
 import transforms3d as tf3d
 from abc import ABC, abstractmethod
+import time
 import yaml
 
-from riptide_msgs.msg import PwmStamped
+from riptide_msgs2.action import FollowTrajectory
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Quaternion, Vector3, Twist
+from std_msgs.msg import Empty, Bool
 
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
@@ -246,14 +249,19 @@ class AngularCascadedPController(CascadedPController):
         self.steadyVelThresh = 0.1
         self.steadyAccelThresh = 0.1
 
+    def slerp(one, two, t):
+        """Spherical Linear intERPolation."""
+        return tf3d.quaternions.qmult(tf3d.quaternions.qmult(two, tf3d.quaternions.qinverse(one))**t, one)
+
+
+
     def computeCorrectiveVelocity(self, odom):
 
         if self.targetPosition is not None:
             currentOrientation = msgToNumpy(odom.pose.pose.orientation)
 
             # Below code only works for small angles so lets find an orientation in the right direction but with a small angle
-            # need to figure out what slerp is
-            intermediateOrientation = tf3d.quaternions.slerp(currentOrientation, self.targetPosition, 0.01)
+            intermediateOrientation = self.slerp(currentOrientation, self.targetPosition, 0.01)
             dq = (intermediateOrientation - currentOrientation)
             outputVel = tf3d.quaternions.qmult(tf3d.quaternions.qinverse(currentOrientation), dq)[:3] * self.positionP
             return outputVel        
@@ -325,42 +333,42 @@ class AccelerationCalculator:
 
         return netForce, netTorque
 
-# class TrajectoryReader:
+class TrajectoryReader:
 
-#     def __init__(self, linear_controller, angular_controller):
-#         self.linear_controller = linear_controller
-#         self.angular_controller = angular_controller
-#         self._as = actionlib.SimpleActionServer("follow_trajectory", riptide_controllers.msg.FollowTrajectoryAction, execute_cb=self.execute_cb, auto_start=False)
-#         self._as.start()
+    def __init__(self, linear_controller, angular_controller, node: rclpy.Node):
+        self.linear_controller = linear_controller
+        self.angular_controller = angular_controller
+        self._as = ActionServer(self, FollowTrajectoryAction, "follow_trajectory", self.execute_cb)
+        self._nh = node
 
-#     def execute_cb(self, goal):
-#         start = rclpy.get_rostime()
+    def execute_cb(self, goal):
+        start = self._nh.get_clock().now()
 
-#         for point in goal.trajectory.points:
-#             # Wait for next point
-#             while (rclpy.get_rostime() - start) < point.time_from_start:
-#                 if self._as.is_preempt_requested():
-#                     self.linear_controller.targetVelocity = np.zeros(3)
-#                     self.linear_controller.targetAcceleration = np.zeros(3)
-#                     self.angular_controller.targetVelocity = np.zeros(3)
-#                     self.angular_controller.targetAcceleration = np.zeros(3)
-#                     self._as.set_preempted()
-#                     return
+        for point in goal.trajectory.points:
+            # Wait for next point
+            while (self._nh.get_clock().now() - start) < point.time_from_start:
+                if self._as.is_preempt_requested():
+                    self.linear_controller.targetVelocity = np.zeros(3)
+                    self.linear_controller.targetAcceleration = np.zeros(3)
+                    self.angular_controller.targetVelocity = np.zeros(3)
+                    self.angular_controller.targetAcceleration = np.zeros(3)
+                    self._as.set_preempted()
+                    return
 
-#                 rclpy.sleep(0.01)
+                time.sleep(0.01)
 
-#             self.linear_controller.targetPosition = msgToNumpy(point.transforms[0].translation)
-#             self.linear_controller.targetVelocity = msgToNumpy(point.velocities[0].linear)
-#             self.linear_controller.targetAcceleration = msgToNumpy(point.accelerations[0].linear)
-#             self.angular_controller.targetPosition = msgToNumpy(point.transforms[0].rotation)
-#             self.angular_controller.targetVelocity = msgToNumpy(point.velocities[0].angular)
-#             self.angular_controller.targetAcceleration = msgToNumpy(point.accelerations[0].angular)
+            self.linear_controller.targetPosition = msgToNumpy(point.transforms[0].translation)
+            self.linear_controller.targetVelocity = msgToNumpy(point.velocities[0].linear)
+            self.linear_controller.targetAcceleration = msgToNumpy(point.accelerations[0].linear)
+            self.angular_controller.targetPosition = msgToNumpy(point.transforms[0].rotation)
+            self.angular_controller.targetVelocity = msgToNumpy(point.velocities[0].angular)
+            self.angular_controller.targetAcceleration = msgToNumpy(point.accelerations[0].angular)
 
-#         last_point = goal.trajectory.points[-1]
-#         self.linear_controller.setTargetPosition(last_point.transforms[0].translation)
-#         self.angular_controller.setTargetPosition(last_point.transforms[0].rotation)
+        last_point = goal.trajectory.points[-1]
+        self.linear_controller.setTargetPosition(last_point.transforms[0].translation)
+        self.angular_controller.setTargetPosition(last_point.transforms[0].rotation)
 
-#         self._as.set_succeeded()
+        self._as.set_succeeded()
 
 class ControllerNode(Node):
     def blob(self, params):
@@ -373,36 +381,39 @@ class ControllerNode(Node):
         self.add_on_set_parameters_callback(self.paramUpdateCallback)
         self.create_subscription(Odometry, "{}odometry/filtered".format(self.get_namespace()), self.blob, qos_profile_system_default)
         
-        # config_path = rclpy.get_param("~vehicle_config")
-        # with open(config_path, 'r') as stream:
-        #     config = yaml.safe_load(stream)
+        self.declare_parameter("vehicle_config")
+        config_path = self.get_parameter("~vehicle_config")
+        with open(config_path, 'r') as stream:
+            config = yaml.safe_load(stream)
 
-        # self.linearController = LinearCascadedPController()
-        # self.angularController = AngularCascadedPController()
-        # self.accelerationCalculator = AccelerationCalculator(config)
-        # self.trajectory_reader = TrajectoryReader(self.linearController, self.angularController)
+        self.linearController = LinearCascadedPController()
+        self.angularController = AngularCascadedPController()
+        self.accelerationCalculator = AccelerationCalculator(config)
+        self.trajectory_reader = TrajectoryReader(self.linearController, self.angularController)
 
-        # self.maxLinearVelocity = config["maximum_linear_velocity"]
-        # self.maxLinearAcceleration = config["maximum_linear_acceleration"]
-        # self.maxAngularVelocity = config["maximum_angular_velocity"]
-        # self.maxAngularAcceleration = config["maximum_angular_acceleration"]
+        self.maxLinearVelocity = config["maximum_linear_velocity"]
+        self.maxLinearAcceleration = config["maximum_linear_acceleration"]
+        self.maxAngularVelocity = config["maximum_angular_velocity"]
+        self.maxAngularAcceleration = config["maximum_angular_acceleration"]
 
-        # self.lastTorque = None
-        # self.lastForce = None
-        # self.off = True
+        self.lastTorque = None
+        self.lastForce = None
+        self.off = True
 
-        # self.forcePub = rclpy.Publisher("net_force", Twist, queue_size=1)
-        # self.steadyPub = rclpy.Publisher("steady", Bool, queue_size=1)
-        # self.accelPub = rclpy.Publisher("~requested_accel", Twist, queue_size=1)
-        # rclpy.Subscriber("odometry/filtered", Odometry, self.updateState)
-        # rclpy.Subscriber("orientation", Quaternion, self.angularController.setTargetPosition)
-        # rclpy.Subscriber("angular_velocity", Vector3, self.angularController.setTargetVelocity)
-        # rclpy.Subscriber("disable_angular", Empty, self.angularController.disable)
-        # rclpy.Subscriber("position", Vector3, self.linearController.setTargetPosition)
-        # rclpy.Subscriber("linear_velocity", Vector3, self.linearController.setTargetVelocity)
-        # rclpy.Subscriber("disable_linear", Empty, self.linearController.disable)
-        # rclpy.Subscriber("off", Empty, self.turnOff)
-        # rclpy.Subscriber("state/kill_switch", Bool, self.switch_cb)
+        self.forcePub = self.create_publisher(Twist, "net_force", qos_profile_system_default)
+        self.steadyPub = self.create_publisher(bool, "steady", qos_profile_system_default)
+        self.accelPub = self.create_publisher(Twist, "~requested_accel", qos_profile_system_default)
+
+        # just to hold the subs
+        self.subs = []
+        self.subs.append(self.create_subscription(Quaternion, "orientation", self.angularController.setTargetPosition, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Vector3, "angular_velocity", self.angularController.setTargetVelocity, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Empty, "disable_angular", self.angularController.disable, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Vector3, "position", self.linearController.setTargetPosition, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Vector3, "linear_velocity", self.linearController.setTargetVelocity, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Empty, "disable_linear", self.linearController.disable, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Empty, "off", self.turnOff, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Bool, "state/kill_switch", self.switch_cb, qos_profile_system_default))
         
 
         
@@ -452,28 +463,28 @@ class ControllerNode(Node):
     #         "max_angular_accel_z": config["maximum_angular_acceleration"][2]               
     #     })
 
-    # def updateState(self, odomMsg):        
-    #     linearAccel = self.linearController.update(odomMsg)
-    #     angularAccel = self.angularController.update(odomMsg)
+    def updateState(self, odomMsg):        
+        linearAccel = self.linearController.update(odomMsg)
+        angularAccel = self.angularController.update(odomMsg)
 
-    #     self.accelPub.publish(Twist(Vector3(*linearAccel), Vector3(*angularAccel)))
+        self.accelPub.publish(Twist(Vector3(*linearAccel), Vector3(*angularAccel)))
 
-    #     if np.linalg.norm(linearAccel) > 0 or np.linalg.norm(angularAccel) > 0:
-    #         self.off = False
+        if np.linalg.norm(linearAccel) > 0 or np.linalg.norm(angularAccel) > 0:
+            self.off = False
 
-    #     if not self.off:
-    #         netForce, netTorque = self.accelerationCalculator.accelToNetForce(odomMsg, linearAccel, angularAccel)
-    #     else:
-    #         netForce, netTorque = np.zeros(3), np.zeros(3)
+        if not self.off:
+            netForce, netTorque = self.accelerationCalculator.accelToNetForce(odomMsg, linearAccel, angularAccel)
+        else:
+            netForce, netTorque = np.zeros(3), np.zeros(3)
 
-    #     self.steadyPub.publish(self.linearController.steady and self.angularController.steady)
+        self.steadyPub.publish(self.linearController.steady and self.angularController.steady)
 
-    #     if not np.array_equal(self.lastTorque, netTorque) or \
-    #        not np.array_equal(self.lastForce, netForce):
+        if not np.array_equal(self.lastTorque, netTorque) or \
+           not np.array_equal(self.lastForce, netForce):
 
-    #         self.forcePub.publish(Twist(Vector3(*netForce), Vector3(*netTorque)))
-    #         self.lastForce = netForce
-    #         self.lastTorque = netTorque
+            self.forcePub.publish(Twist(Vector3(*netForce), Vector3(*netTorque)))
+            self.lastForce = netForce
+            self.lastTorque = netTorque
     
     # def dynamicReconfigureCb(self, config, level):
     #     self.linearController.positionP[0] = config["linear_position_p_x"]
@@ -525,15 +536,15 @@ class ControllerNode(Node):
 
     #     return config
 
-    # def turnOff(self, msg=None):
-    #     self.angularController.disable()
-    #     self.linearController.disable()
-    #     self.off = True
+    def turnOff(self, msg=None):
+        self.angularController.disable()
+        self.linearController.disable()
+        self.off = True
 
-    # def switch_cb(self, msg):
-    #     if not msg.data:
-    #         self.turnOff()
-    #     pass
+    def switch_cb(self, msg):
+        if not msg.data:
+            self.turnOff()
+        pass
 
 def main(args=None):
     rclpy.init(args=args)
