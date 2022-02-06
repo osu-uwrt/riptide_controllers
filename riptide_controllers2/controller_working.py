@@ -252,7 +252,8 @@ class AngularCascadedPController(CascadedPController):
             currentOrientation = msgToNumpy(odom.pose.pose.orientation)
 
             # Below code only works for small angles so lets find an orientation in the right direction but with a small angle
-            intermediateOrientation = tf3d.quaternions.(currentOrientation, self.targetPosition, 0.01)
+            # need to figure out what slerp is
+            intermediateOrientation = tf3d.quaternions.slerp(currentOrientation, self.targetPosition, 0.01)
             dq = (intermediateOrientation - currentOrientation)
             outputVel = tf3d.quaternions.qmult(tf3d.quaternions.qinverse(currentOrientation), dq)[:3] * self.positionP
             return outputVel        
