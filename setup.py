@@ -28,4 +28,7 @@ setup(
             'thruster_solver = riptide_controllers2.thruster_solver:main',
         ],
     },
+    py_modules=[
+        'riptide_controllers2.Controllers'
+    ]
 )

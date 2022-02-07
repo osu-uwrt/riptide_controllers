@@ -1,7 +1,0 @@
-#goal definition
-trajectory_msgs/MultiDOFJointTrajectory trajectory
----
-#result definition
----
-#feedback
-float32 progress

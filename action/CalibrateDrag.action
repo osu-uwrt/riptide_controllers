@@ -1,8 +1,0 @@
-#goal definition
----
-#result definition
-float64[] linear_drag
-float64[] quadratic_drag
----
-#feedback
-int32[] sequence
