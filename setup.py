@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'controller = riptide_controllers2.controller_working:main',
             'thruster_solver = riptide_controllers2.thruster_solver:main',
+            'trajectory_tester = riptide_controllers2.trajectory_tester:main'
         ],
     },
     py_modules=[

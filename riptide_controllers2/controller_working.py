@@ -36,6 +36,10 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, Vector3, Twist
 from std_msgs.msg import Empty, Bool
 
+# assumes order is xyz
+def vect3_from_np(np_vect):
+    return Vector3(x=np_vect[0], y=np_vect[1], z=np_vect[2])
+
 class ControllerNode(Node):
         
     def __init__(self):
@@ -69,6 +73,7 @@ class ControllerNode(Node):
 
         # setup all subscribers
         self.subs = []
+        self.subs.append(self.create_subscription(Odometry, "odometry/filtered", self.updateState, qos_profile_system_default))
         self.subs.append(self.create_subscription(Quaternion, "orientation", self.angularController.setTargetPosition, qos_profile_system_default))
         self.subs.append(self.create_subscription(Vector3, "angular_velocity", self.angularController.setTargetVelocity, qos_profile_system_default))
         self.subs.append(self.create_subscription(Empty, "disable_angular", self.angularController.disable, qos_profile_system_default))
@@ -79,7 +84,7 @@ class ControllerNode(Node):
         self.subs.append(self.create_subscription(Bool, "state/kill_switch", self.switch_cb, qos_profile_system_default))
 
         #create an action server
-        self._as = ActionServer(self, FollowTrajectory, "follow_trajectory", self.execute_cb)
+        self._as = ActionServer(self, FollowTrajectory, "follow_trajectory", self.trajectory_callback)
 
         # new parameter reconfigure call
         self.add_on_set_parameters_callback(self.paramUpdateCallback)
@@ -90,7 +95,10 @@ class ControllerNode(Node):
         linearAccel = self.linearController.update(odomMsg)
         angularAccel = self.angularController.update(odomMsg)
 
-        self.accelPub.publish(Twist(Vector3(*linearAccel), Vector3(*angularAccel)))
+        accelTwist = Twist()
+        accelTwist.linear = vect3_from_np(linearAccel)
+        accelTwist.angular = vect3_from_np(angularAccel)
+        self.accelPub.publish(accelTwist)
 
         if np.linalg.norm(linearAccel) > 0 or np.linalg.norm(angularAccel) > 0:
             self.off = False
@@ -100,29 +108,29 @@ class ControllerNode(Node):
         else:
             netForce, netTorque = np.zeros(3), np.zeros(3)
 
-        self.steadyPub.publish(self.linearController.steady and self.angularController.steady)
+        isSteady = Bool()
+        isSteady.data = self.linearController.steady and self.angularController.steady
+        self.steadyPub.publish(isSteady)
 
         if not np.array_equal(self.lastTorque, netTorque) or \
            not np.array_equal(self.lastForce, netForce):
 
-            self.forcePub.publish(Twist(Vector3(*netForce), Vector3(*netTorque)))
+            forceTwist = Twist()
+            forceTwist.linear = vect3_from_np(netForce)
+            forceTwist.angular = vect3_from_np(netTorque)
+            self.forcePub.publish(forceTwist)
+
             self.lastForce = netForce
             self.lastTorque = netTorque
 
-    def execute_cb(self, goal_handle):
+        self.get_logger().debug("ticked controllers")
+
+    def trajectory_callback(self, goal_handle):
         start = self.get_clock().now()
 
         for point in goal_handle.goal.trajectory.points:
             # Wait for next point
             while (self.get_clock().now() - start) < point.time_from_start:
-                if self._as.is_preempt_requested():
-                    self.linear_controller.targetVelocity = np.zeros(3)
-                    self.linear_controller.targetAcceleration = np.zeros(3)
-                    self.angular_controller.targetVelocity = np.zeros(3)
-                    self.angular_controller.targetAcceleration = np.zeros(3)
-                    self._as.set_preempted()
-                    return
-
                 time.sleep(0.01)
 
             self.linear_controller.targetPosition = msgToNumpy(point.transforms[0].translation)
@@ -136,7 +144,7 @@ class ControllerNode(Node):
         self.linear_controller.setTargetPosition(last_point.transforms[0].translation)
         self.angular_controller.setTargetPosition(last_point.transforms[0].rotation)
 
-        self.goal_handle.set_succeeded()
+        goal_handle.succeed()
     
     def paramUpdateCallback(self, config):
         pass
