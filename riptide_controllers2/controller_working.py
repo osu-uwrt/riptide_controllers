@@ -84,6 +84,8 @@ class ControllerNode(Node):
         # new parameter reconfigure call
         self.add_on_set_parameters_callback(self.paramUpdateCallback)
 
+        self.get_logger().info("Riptide controller initalized")
+
     def updateState(self, odomMsg):        
         linearAccel = self.linearController.update(odomMsg)
         angularAccel = self.angularController.update(odomMsg)
