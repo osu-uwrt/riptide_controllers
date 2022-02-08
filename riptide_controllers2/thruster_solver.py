@@ -16,34 +16,38 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_system_default # can replace this with others
-from rclpy.action import ActionServer
+
+from tf2_ros import TransformException
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
 
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Float32MultiArray, Int16MultiArray
+from riptide_msgs2.msg import PwmStamped
+from std_msgs.msg import Float32MultiArray
+
 import numpy as np
 import yaml
 from tf_transformations import euler_matrix
-from tf import TransformListener
 from scipy.optimize import minimize
+
+from riptide_controllers2.Controllers import msgToNumpy
 
 
 NEUTRAL_PWM = 1500
 MIN_PWM = 1230
 MAX_PWM = 1770
 
-def msg_to_numpy(msg):
-    return np.array([msg.x, msg.y, msg.z])
-
 class ThrusterSolverNode(Node):
 
     def __init__(self):
-        super().__init__('riptide_controllers2') # TODO: Do I need this?
+        super().__init__('riptide_controllers2')
 
         self.create_subscription(Twist, "net_force", self.force_cb, qos_profile_system_default)
 
         self.thruster_pub = self.create_publisher( Float32MultiArray, "thruster_forces", qos_profile_system_default)
-        self.pwm_pub = self.create_publisher("command/pwm", Int16MultiArray, queue_size=5)
-        self.tf_namespace = rclpy.get_param("~robot")
+        self.pwm_pub = self.create_publisher(PwmStamped ,"command/pwm", qos_profile_system_default)
+        self.declare_parameter("robot", "")
+        self.tf_namespace = self.get_parameter("robot").value
 
         # Load thruster info
         self.declare_parameter("vehicle_config", "")
@@ -87,8 +91,11 @@ class ThrusterSolverNode(Node):
         self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
 
         self.start_time = None
-        self.timer = rclpy.Timer(rclpy.Duration(0.1), self.check_thrusters) # TODO: figure this line out
-        self.listener = TransformListener()
+        self.timer = self.create_timer(0.1, self.check_thrusters)
+        
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
         self.WATER_LEVEL = 0
 
     def publish_pwm(self, forces):
@@ -129,24 +136,27 @@ class ThrusterSolverNode(Node):
 
             pwm_values.append(pwm)
 
-        msg = Int16MultiArray()
-        msg.data = pwm_values
+        # Make the PWM message
+        msg = PwmStamped()
+
+        msg.pwm = pwm
+
         self.pwm_pub.publish(msg)
 
 
     # Timer callback which disables thrusters that are out of the water
-    def check_thrusters(self, timer_event):
+    def check_thrusters(self):
         try:
             if self.start_time is None:
-                self.start_time = rclpy.get_rostime() # TODO: figure this line out
+                self.start_time = self.get_clock().now()
             self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
             for i in range(self.thruster_coeffs.shape[0]):
-                trans, _ = self.listener.lookupTransform("world", "%s/thruster_%d" % (self.tf_namespace, i), rclpy.Time(0))      
+                trans, _ = self.tf_buffer.lookup_transform("world", "%s/thruster_%d" % (self.tf_namespace, i), 0)      
                 if trans[2] > self.WATER_LEVEL:
                     self.current_thruster_coeffs[i, :] = 0
         except Exception as ex:
             # Supress startup errors
-            if (rclpy.get_rostime() - self.start_time).secs > 1:
+            if (self.get_clock().now() - self.start_time).secs > 1:
                 self.get_logger().fatal(str(ex))
 
     # Cost function forcing the thruster to output desired net force
@@ -179,8 +189,8 @@ class ThrusterSolverNode(Node):
 
     def force_cb(self, msg):
         desired_state = np.zeros(6)
-        desired_state[:3] = msg_to_numpy(msg.linear)
-        desired_state[3:] = msg_to_numpy(msg.angular)
+        desired_state[:3] = msgToNumpy(msg.linear)
+        desired_state[3:] = msgToNumpy(msg.angular)
 
         # Optimize cost function to find optimal thruster forces
         res = minimize(self.total_cost, self.initial_condition, args=(desired_state), method='SLSQP', \
@@ -188,7 +198,7 @@ class ThrusterSolverNode(Node):
 
         # Warn if we did not find valid thruster forces
         if self.force_cost(res.x, desired_state) > 0.05:
-            rclpy.logwarn_throttle(1, "Unable to exert requested force")
+            self.get_logger().warning("Unable to exert requested force")
 
         msg = Float32MultiArray()
         msg.data = res.x        
