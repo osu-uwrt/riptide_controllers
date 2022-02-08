@@ -14,11 +14,15 @@
 # message, the robot solves for the optimal thruster forces and publishes them
 
 import rclpy
+from rclpy.node import Node
+from rclpy.qos import qos_profile_system_default # can replace this with others
+from rclpy.action import ActionServer
+
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float32MultiArray, Int16MultiArray
 import numpy as np
 import yaml
-from tf.transformations import euler_matrix
+from tf_transformations import euler_matrix
 from tf import TransformListener
 from scipy.optimize import minimize
 
@@ -30,19 +34,26 @@ MAX_PWM = 1770
 def msg_to_numpy(msg):
     return np.array([msg.x, msg.y, msg.z])
 
-class ThrusterSolverNode:
+class ThrusterSolverNode(Node):
 
     def __init__(self):
-        rclpy.Subscriber("net_force", Twist, self.force_cb, queue_size=1)
+        super().__init__('riptide_controllers2') # TODO: Do I need this?
 
-        self.thruster_pub = rclpy.Publisher("thruster_forces", Float32MultiArray, queue_size=5)
-        self.pwm_pub = rclpy.Publisher("command/pwm", Int16MultiArray, queue_size=5)
+        self.create_subscription(Twist, "net_force", self.force_cb, qos_profile_system_default)
+
+        self.thruster_pub = self.create_publisher( Float32MultiArray, "thruster_forces", qos_profile_system_default)
+        self.pwm_pub = self.create_publisher("command/pwm", Int16MultiArray, queue_size=5)
         self.tf_namespace = rclpy.get_param("~robot")
 
         # Load thruster info
-        config_path = rclpy.get_param("~vehicle_config")
+        self.declare_parameter("vehicle_config", "")
+        config_path = self.get_parameter("vehicle_config").value
+        if(config_path == ''):
+            self.get_logger().fatal("vehicle config file param not set or empty, exiting")
+
         with open(config_path, 'r') as stream:
             config_file = yaml.safe_load(stream)
+
 
         thruster_info = config_file['thrusters']
         self.thruster_coeffs = np.zeros((len(thruster_info), 6))
@@ -76,7 +87,7 @@ class ThrusterSolverNode:
         self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
 
         self.start_time = None
-        self.timer = rclpy.Timer(rclpy.Duration(0.1), self.check_thrusters)
+        self.timer = rclpy.Timer(rclpy.Duration(0.1), self.check_thrusters) # TODO: figure this line out
         self.listener = TransformListener()
         self.WATER_LEVEL = 0
 
@@ -127,7 +138,7 @@ class ThrusterSolverNode:
     def check_thrusters(self, timer_event):
         try:
             if self.start_time is None:
-                self.start_time = rclpy.get_rostime()
+                self.start_time = rclpy.get_rostime() # TODO: figure this line out
             self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
             for i in range(self.thruster_coeffs.shape[0]):
                 trans, _ = self.listener.lookupTransform("world", "%s/thruster_%d" % (self.tf_namespace, i), rclpy.Time(0))      
@@ -136,7 +147,7 @@ class ThrusterSolverNode:
         except Exception as ex:
             # Supress startup errors
             if (rclpy.get_rostime() - self.start_time).secs > 1:
-                rclpy.logerr(str(ex))
+                self.get_logger().fatal(str(ex))
 
     # Cost function forcing the thruster to output desired net force
     def force_cost(self, thruster_forces, desired_state):
@@ -186,8 +197,10 @@ class ThrusterSolverNode:
 
         self.thruster_pub.publish(msg)
 
+def main(args=None):
+    rclpy.init(args=args)
+    node = ThrusterSolverNode()
+    rclpy.spin(node)
 
 if __name__ == '__main__':
-    rclpy.init_node("thruster_solver")
-    controller = ThrusterSolverNode()
-    rclpy.spin()
+    main()
