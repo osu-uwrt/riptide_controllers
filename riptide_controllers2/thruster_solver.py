@@ -15,6 +15,8 @@
 
 import rclpy
 from rclpy.node import Node
+from rclpy.duration import Duration
+from rclpy.time import Time
 from rclpy.qos import qos_profile_system_default # can replace this with others
 
 from tf2_ros import TransformException
@@ -151,12 +153,12 @@ class ThrusterSolverNode(Node):
                 self.start_time = self.get_clock().now()
             self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
             for i in range(self.thruster_coeffs.shape[0]):
-                trans, _ = self.tf_buffer.lookup_transform("world", "%s/thruster_%d" % (self.tf_namespace, i), 0)      
+                trans, _ = self.tf_buffer.lookup_transform("world", "%s/thruster_%d" % (self.tf_namespace, i), Time())      
                 if trans[2] > self.WATER_LEVEL:
                     self.current_thruster_coeffs[i, :] = 0
         except Exception as ex:
             # Supress startup errors
-            if (self.get_clock().now() - self.start_time).secs > 1:
+            if (self.get_clock().now() - self.start_time) > Duration(seconds=1.0):
                 self.get_logger().fatal(str(ex))
 
     # Cost function forcing the thruster to output desired net force

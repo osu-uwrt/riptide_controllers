@@ -32,4 +32,12 @@ def generate_launch_description():
             output="screen",
             parameters=[{"vehicle_config": config}]
         ),
+
+        launch_ros.actions.Node(
+            package="riptide_controllers2",
+            executable="thruster_solver",
+            name="thruster_solver",
+            output="screen",
+            parameters=[{"vehicle_config": config}]
+        ),
     ])
