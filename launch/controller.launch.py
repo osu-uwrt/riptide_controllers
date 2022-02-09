@@ -2,35 +2,40 @@ import launch
 import launch.actions
 from ament_index_python.packages import get_package_share_directory
 import launch_ros.actions
-import os
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import TextSubstitution, LaunchConfiguration
-from launch_ros.actions import PushRosNamespace
+from launch.substitutions import TextSubstitution, LaunchConfiguration, PathJoinSubstitution
 
 def generate_launch_description():
 
     # Read in the vehicle's namespace through the command line or use the default value one is not provided
-    launch.actions.DeclareLaunchArgument(
-        "robot", 
-        default_value="puddles",
-        description="Name of the vehicle",
-    )
-    robot = 'puddles'
+    robot = LaunchConfiguration("robot")
 
+    
     # declare the path to the robot's vehicle description file
-    config = os.path.join(
+    config = PathJoinSubstitution([
         get_package_share_directory('riptide_descriptions2'),
         'config',
-        robot + '.yaml'
-    )
+        LaunchConfiguration("robot_yaml")
+    ])
 
     return launch.LaunchDescription([
+        DeclareLaunchArgument(
+            "robot", 
+            default_value="puddles",
+            description="Name of the vehicle",
+        ),
+        DeclareLaunchArgument('robot_yaml', default_value=[LaunchConfiguration("robot"), '.yaml']),
+        
+        launch_ros.actions.PushRosNamespace(LaunchConfiguration("robot")),
         launch_ros.actions.Node(
             package="riptide_controllers2",
             executable="controller",
             name="controller",
             output="screen",
-            parameters=[{"vehicle_config": config}]
+            parameters=[
+                {"vehicle_config": config},
+                {"robot": robot},
+            ]
         ),
 
         launch_ros.actions.Node(
@@ -38,6 +43,9 @@ def generate_launch_description():
             executable="thruster_solver",
             name="thruster_solver",
             output="screen",
-            parameters=[{"vehicle_config": config}]
+            parameters=[
+                {"vehicle_config": config},
+                {"robot": robot},
+            ]
         ),
     ])
