@@ -25,8 +25,7 @@ def generate_launch_description():
             description="Name of the vehicle",
         ),
         DeclareLaunchArgument('robot_yaml', default_value=[LaunchConfiguration("robot"), '.yaml']),
-        
-        launch_ros.actions.PushRosNamespace(LaunchConfiguration("robot")),
+
         launch_ros.actions.Node(
             package="riptide_controllers2",
             executable="controller",
