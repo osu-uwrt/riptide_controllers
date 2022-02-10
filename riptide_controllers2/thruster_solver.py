@@ -153,8 +153,9 @@ class ThrusterSolverNode(Node):
                 self.start_time = self.get_clock().now()
             self.current_thruster_coeffs = np.copy(self.thruster_coeffs)
             for i in range(self.thruster_coeffs.shape[0]):
-                trans, _ = self.tf_buffer.lookup_transform("world", "%s/thruster_%d" % (self.tf_namespace, i), Time())      
-                if trans[2] > self.WATER_LEVEL:
+                self.get_logger().debug("transforming from world to %s/thruster_%d" % (self.tf_namespace, i))
+                trans = self.tf_buffer.lookup_transform("world", "%s/thruster_%d" % (self.tf_namespace, i), Time())  
+                if trans.transform.translation.z > self.WATER_LEVEL:
                     self.current_thruster_coeffs[i, :] = 0
         except Exception as ex:
             # Supress startup errors
@@ -199,11 +200,15 @@ class ThrusterSolverNode(Node):
                         jac=self.total_cost_jac, bounds=self.bounds)
 
         # Warn if we did not find valid thruster forces
-        if self.force_cost(res.x, desired_state) > 0.05:
+        if self.force_cost(res.x, desired_state) > 0.05 or not res.success:
             self.get_logger().warning("Unable to exert requested force")
 
+        data = []
+        for val in res.x :
+            data.append(float(val))
+
         msg = Float32MultiArray()
-        msg.data = res.x        
+        msg.data = data      
 
         self.publish_pwm(res.x)
 

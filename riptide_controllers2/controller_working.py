@@ -23,7 +23,7 @@
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_system_default # can replace this with others
+from rclpy.qos import qos_profile_system_default, qos_profile_sensor_data # can replace this with others
 from rclpy.action import ActionServer
 
 import numpy as np
@@ -32,6 +32,7 @@ import yaml
 
 from riptide_controllers2.Controllers import msgToNumpy, LinearCascadedPController, AngularCascadedPController, AccelerationCalculator
 from riptide_msgs2.action import FollowTrajectory
+from riptide_msgs2.msg import RobotState
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, Vector3, Twist
 from std_msgs.msg import Empty, Bool
@@ -81,7 +82,7 @@ class ControllerNode(Node):
         self.subs.append(self.create_subscription(Vector3, "linear_velocity", self.linearController.setTargetVelocity, qos_profile_system_default))
         self.subs.append(self.create_subscription(Empty, "disable_linear", self.linearController.disable, qos_profile_system_default))
         self.subs.append(self.create_subscription(Empty, "off", self.turnOff, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Bool, "state/kill_switch", self.switch_cb, qos_profile_system_default))
+        self.subs.append(self.create_subscription(RobotState, "state/robot", self.switch_cb, qos_profile_sensor_data))
 
         #create an action server
         self._as = ActionServer(self, FollowTrajectory, "follow_trajectory", self.trajectory_callback)
@@ -202,8 +203,8 @@ class ControllerNode(Node):
         self.linearController.disable()
         self.off = True
 
-    def switch_cb(self, msg):
-        if not msg.data:
+    def switch_cb(self, msg : RobotState):
+        if not msg.kill_switch_inserted:
             self.turnOff()
         pass
 
