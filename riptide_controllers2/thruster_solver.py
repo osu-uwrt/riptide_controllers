@@ -141,7 +141,7 @@ class ThrusterSolverNode(Node):
         # Make the PWM message
         msg = PwmStamped()
 
-        msg.pwm = pwm
+        msg.pwm = pwm_values
 
         self.pwm_pub.publish(msg)
 
