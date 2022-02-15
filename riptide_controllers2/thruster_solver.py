@@ -142,6 +142,7 @@ class ThrusterSolverNode(Node):
         msg = PwmStamped()
 
         msg.pwm = pwm_values
+        msg.header.stamp = self.get_clock().now().to_msg()
 
         self.pwm_pub.publish(msg)
 

@@ -1,6 +1,7 @@
 import numpy as np
 import transforms3d as tf3d
 from abc import ABC, abstractmethod
+from nav_msgs.msg import Odometry
 
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
@@ -69,7 +70,7 @@ class CascadedPController(ABC):
         self.steady = True
 
     @abstractmethod
-    def computeCorrectiveVelocity(self, odom):
+    def computeCorrectiveVelocity(self, odom: Odometry):
         """ 
         Computes a corrective velocity.
     
@@ -85,7 +86,7 @@ class CascadedPController(ABC):
         pass
 
     @abstractmethod
-    def computeCorrectiveAcceleration(self, odom, correctiveVelocity):
+    def computeCorrectiveAcceleration(self, odom: Odometry, correctiveVelocity):
         """ 
         Computes a corrective acceleration.
     
@@ -145,7 +146,7 @@ class CascadedPController(ABC):
         self.targetVelocity = None
         self.targetAcceleration = None
 
-    def update(self, odom):
+    def update(self, odom: Odometry):
         """ 
         Updates the controller
     
@@ -188,17 +189,18 @@ class LinearCascadedPController(CascadedPController):
         self.steadyVelThresh = 0.02
         self.steadyAccelThresh = 0.02
 
-    def computeCorrectiveVelocity(self, odom):
+    def computeCorrectiveVelocity(self, odom: Odometry):
 
         if self.targetPosition is not None:
             currentPosition = msgToNumpy(odom.pose.pose.position) # [1 0 0]
             outputVel = (self.targetPosition - currentPosition) * self.positionP # [-1 0 1]
             orientation = msgToNumpy(odom.pose.pose.orientation)
+            #print("position: {}  vel: {}  orient: {}".format(currentPosition, outputVel, orientation))
             return worldToBody(orientation, outputVel)
         else:
             return np.zeros(3)
 
-    def computeCorrectiveAcceleration(self, odom, correctiveVelocity):
+    def computeCorrectiveAcceleration(self, odom: Odometry, correctiveVelocity):
 
         if self.targetVelocity is not None:          
             targetVelocity = self.targetVelocity + correctiveVelocity
@@ -216,7 +218,7 @@ class AngularCascadedPController(CascadedPController):
         self.steadyVelThresh = 0.1
         self.steadyAccelThresh = 0.1
 
-    def computeCorrectiveVelocity(self, odom):
+    def computeCorrectiveVelocity(self, odom: Odometry):
 
         if self.targetPosition is not None:
             currentOrientation = msgToNumpy(odom.pose.pose.orientation)

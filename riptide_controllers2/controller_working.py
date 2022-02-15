@@ -63,6 +63,24 @@ class ControllerNode(Node):
         self.maxAngularVelocity = config["maximum_angular_velocity"]
         self.maxAngularAcceleration = config["maximum_angular_acceleration"]
 
+        self.linearController.positionP = config["linear_position_p"]
+        self.linearController.velocityP = config["linear_velocity_p"]
+
+        self.angularController.positionP = config["angular_position_p"]
+        self.angularController.velocityP = config["angular_velocity_p"]
+
+        self.accelerationCalculator.linearDrag = config["linear_damping"]
+        self.accelerationCalculator.quadraticDrag = config["quadratic_damping"]    
+
+        self.linearController.maxVelocity = config["maximum_linear_velocity"]
+        self.linearController.maxAccel = config["maximum_linear_acceleration"]
+
+        self.angularController.maxVelocity = config["maximum_angular_velocity"]
+        self.angularController.maxAccel = config["maximum_angular_acceleration"]
+
+        self.accelerationCalculator.buoyancy = np.array([0, 0, config["volume"] * self.accelerationCalculator.density * self.accelerationCalculator.gravity  ])
+        self.accelerationCalculator.cob = config["cob"]
+
         self.lastTorque = None
         self.lastForce = None
         self.off = True
@@ -95,6 +113,8 @@ class ControllerNode(Node):
     def updateState(self, odomMsg):        
         linearAccel = self.linearController.update(odomMsg)
         angularAccel = self.angularController.update(odomMsg)
+
+        #print(linearAccel, angularAccel)
 
         accelTwist = Twist()
         accelTwist.linear = vect3_from_np(linearAccel)
@@ -149,54 +169,8 @@ class ControllerNode(Node):
     
     def paramUpdateCallback(self, config):
         pass
-    #     self.linearController.positionP[0] = config["linear_position_p_x"]
-    #     self.linearController.positionP[1] = config["linear_position_p_y"]
-    #     self.linearController.positionP[2] = config["linear_position_p_z"]
-    #     self.linearController.velocityP[0] = config["linear_velocity_p_x"]
-    #     self.linearController.velocityP[1] = config["linear_velocity_p_y"]
-    #     self.linearController.velocityP[2] = config["linear_velocity_p_z"]
-        
-    #     self.angularController.positionP[0] = config["angular_position_p_x"]
-    #     self.angularController.positionP[1] = config["angular_position_p_y"]
-    #     self.angularController.positionP[2] = config["angular_position_p_z"]
-    #     self.angularController.velocityP[0] = config["angular_velocity_p_x"]
-    #     self.angularController.velocityP[1] = config["angular_velocity_p_y"]
-    #     self.angularController.velocityP[2] = config["angular_velocity_p_z"]
 
-    #     self.accelerationCalculator.linearDrag[0] = config["linear_x"]    
-    #     self.accelerationCalculator.linearDrag[1] = config["linear_y"] 
-    #     self.accelerationCalculator.linearDrag[2] = config["linear_z"]
-    #     self.accelerationCalculator.linearDrag[3] = config["linear_rot_x"]
-    #     self.accelerationCalculator.linearDrag[4] = config["linear_rot_y"]
-    #     self.accelerationCalculator.linearDrag[5] = config["linear_rot_z"]
-
-    #     self.accelerationCalculator.quadraticDrag[0] = config["quadratic_x"]    
-    #     self.accelerationCalculator.quadraticDrag[1] = config["quadratic_y"] 
-    #     self.accelerationCalculator.quadraticDrag[2] = config["quadratic_z"] 
-    #     self.accelerationCalculator.quadraticDrag[3] = config["quadratic_rot_x"]
-    #     self.accelerationCalculator.quadraticDrag[4] = config["quadratic_rot_y"]
-    #     self.accelerationCalculator.quadraticDrag[5] = config["quadratic_rot_z"]
-
-    #     self.linearController.maxVelocity[0] = config["max_linear_velocity_x"]
-    #     self.linearController.maxVelocity[1] = config["max_linear_velocity_y"]
-    #     self.linearController.maxVelocity[2] = config["max_linear_velocity_z"]
-    #     self.linearController.maxAccel[0] = config["max_linear_accel_x"]
-    #     self.linearController.maxAccel[1] = config["max_linear_accel_y"]
-    #     self.linearController.maxAccel[2] = config["max_linear_accel_z"]
-
-    #     self.angularController.maxVelocity[0] = config["max_angular_velocity_x"]
-    #     self.angularController.maxVelocity[1] = config["max_angular_velocity_y"]
-    #     self.angularController.maxVelocity[2] = config["max_angular_velocity_z"]
-    #     self.angularController.maxAccel[0] = config["max_angular_accel_x"]
-    #     self.angularController.maxAccel[1] = config["max_angular_accel_y"]
-    #     self.angularController.maxAccel[2] = config["max_angular_accel_z"]
-
-    #     self.accelerationCalculator.buoyancy = np.array([0, 0, config["volume"] * self.accelerationCalculator.density * self.accelerationCalculator.gravity  ])
-    #     self.accelerationCalculator.cob[0] = config["center_x"]
-    #     self.accelerationCalculator.cob[1] = config["center_y"]
-    #     self.accelerationCalculator.cob[2] = config["center_z"]
-
-    #     return config
+        #return config
 
     def turnOff(self, msg=None):
         self.angularController.disable()
