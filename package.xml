@@ -33,7 +33,7 @@
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>riptide_msgs</exec_depend>
+  <exec_depend>riptide_msgs2</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>control_toolbox</exec_depend>
   <exec_depend>tf2</exec_depend>
