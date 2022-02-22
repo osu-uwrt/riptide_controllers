@@ -1,47 +1,120 @@
 #! /usr/bin/env python3
-import rospy
-import actionlib
+import rclpy
+import time
 import yaml
+from rclpy.action import ActionServer, CancelResponse, GoalResponse
+from rclpy.action.server import ServerGoalHandle
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
+from rclpy.qos import qos_profile_system_default
+from queue import Queue
 
-import riptide_controllers.msg
+from riptide_msgs2.action import CalibrateDrag
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, Vector3, Twist
-from dynamic_reconfigure.client import Client
 
-from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from transforms3d import euler
 from math import pi
 import numpy as np
 
 # Z axis is a little off, load interia from puddles.yaml, and update dynamic reconfigure
 
 
-class CalibrateDragAction(object):
+class CalibrateDragActionServer(Node):
 
-    _result = riptide_controllers.msg.CalibrateDragResult()
+    _result = CalibrateDrag.Result()
 
     def __init__(self):
-        self.orientation_pub = rospy.Publisher("orientation", Quaternion, queue_size=5)
-        self.position_pub = rospy.Publisher("position", Vector3, queue_size=5)
-        self.lin_vel_pub = rospy.Publisher("linear_velocity", Vector3, queue_size=5)
-        self.ang_vel_pub = rospy.Publisher("angular_velocity", Vector3, queue_size=5)
+        super().__init__('calibrate_drag')
+        self.declare_parameter("vehicle_config", rclpy.Parameter.Type.STRING)
+
+        self.orientation_pub = self.create_publisher(Quaternion ,"orientation", qos_profile_system_default)
+        self.position_pub = self.create_publisher(Vector3 ,"position", qos_profile_system_default)
+        self.lin_vel_pub = self.create_publisher(Vector3 ,"linear_velocity", qos_profile_system_default)
+        self.ang_vel_pub = self.create_publisher(Vector3 ,"angular_velocity", qos_profile_system_default)
+        
+        self.odometry_sub = self.create_subscription(Odometry, "odometry/filtered", self.odometry_cb, qos_profile_system_default)
+        self.odometry_queue = Queue(1)
+        self.requested_accel_sub = self.create_subscription(Twist, "controller/requested_accel", self.requested_accel_cb, qos_profile_system_default)
+        self.requested_accel_queue = Queue(1)
 
         # Get the mass and COM
-        with open(rospy.get_param('~vehicle_config'), 'r') as stream:
+        with open(self.get_parameter('vehicle_config').value, 'r') as stream:
             vehicle = yaml.safe_load(stream)
             mass = vehicle['mass']
             rotational_inertia = np.array(vehicle['inertia'])
             self.inertia = np.array([mass, mass, mass, rotational_inertia[0], rotational_inertia[1], rotational_inertia[2]])
 
-        self._as = actionlib.SimpleActionServer("calibrate_drag", riptide_controllers.msg.CalibrateDragAction, execute_cb=self.execute_cb, auto_start=False)
-        self._as.start()
+        self.running = False
+
         self.client = Client("controller", timeout=30)
+
+        self._action_server = ActionServer(
+            self,
+            CalibrateDrag,
+            'calibrate_drag',
+            self.execute_cb,
+            goal_callback=self.goal_callback,
+            cancel_callback=self.cancel_callback,
+            callback_group=ReentrantCallbackGroup())
     
+    def destroy(self):
+        self.destroy_node()
+        self._action_server.destroy()
+
+    def goal_callback(self, goal_request):
+        """Accept or reject a client request to begin an action."""
+        if self.running:
+            return GoalResponse.REJECT
+        else:
+            self.running = True
+            return GoalResponse.ACCEPT
+
+    def cancel_callback(self, goal):
+        return CancelResponse.REJECT
+
+
+    ##############################
+    # Message Wait Functions
+    ##############################
+
+    def odometry_cb(self, msg):
+        if not self.odometry_queue.full():
+            self.odometry_queue.put_nowait(msg)
+
+    def wait_for_odometry_msg(self):
+        # Since the queue size is 1, if it has stuff in it just read to clear
+        if not self.odometry_queue.empty():
+            self.odometry_queue.get_nowait()
+            assert self.odometry_queue.empty()
+        
+        return self.odometry_queue.get(True)
+
+    def requested_accel_cb(self, msg):
+        if not self.requested_accel_queue.full():
+            self.requested_accel_queue.put_nowait(msg)
+
+    def wait_for_requested_accel_msg(self):
+        # Since the queue size is 1, if it has stuff in it just read to clear
+        if not self.requested_accel_queue.empty():
+            self.requested_accel_queue.get_nowait()
+            assert self.requested_accel_queue.empty()
+        
+        return self.requested_accel_queue.get(True)
+
+
+    ##############################
+    # Calibration Functions
+    ##############################
+
+
     # Example use: r, p, y = get_euler(odom)
     # RPY in radians
     def get_euler(self, odom_msg):
         quat = odom_msg.pose.pose.orientation
         quat = [quat.x, quat.y, quat.z, quat.w]
-        return euler_from_quaternion(quat)
+        return euler.quat2euler(quat, 'sxyz')
 
     def restrict_angle(self, angle):
         return ((angle + 180) % 360 ) - 180
@@ -51,9 +124,9 @@ class CalibrateDragAction(object):
         r *= pi / 180
         p *= pi / 180
         y *= pi / 180
-        quat = quaternion_from_euler(r, p, y)
+        quat = euler.euler2quat(r, p, y, axes='sxyz')
         self.orientation_pub.publish(Quaternion(*quat))
-        rospy.sleep(5)
+        time.sleep(5)
 
 
     # Apply force on corresponding axes and record velocities
@@ -88,11 +161,11 @@ class CalibrateDragAction(object):
         
         publish_velocity[axis](velocity)
 
-        rospy.sleep(1)
+        time.sleep(1)
         last_vel = 0
         stable_measurements = 0
         while stable_measurements < 10:
-            odom_msg = rospy.wait_for_message("odometry/filtered", Odometry)
+            odom_msg = self.wait_for_odometry_msg()
             cur_vel = get_twist[axis](odom_msg)
 
             if abs((cur_vel - last_vel) / cur_vel) >= 0.1:
@@ -100,22 +173,22 @@ class CalibrateDragAction(object):
             else:
                 stable_measurements += 1
             last_vel = cur_vel
-            rospy.sleep(0.1)
+            time.sleep(0.1)
 
         velocities = []
         for _ in range (10):
-            odom_msg = rospy.wait_for_message("odometry/filtered", Odometry)
+            odom_msg = self.wait_for_odometry_msg()
             velocities.append(get_twist[axis](odom_msg))
-            rospy.sleep(0.1)
+            time.sleep(0.1)
 
         forces = []
         for _ in range (10):
-            accel_msg = rospy.wait_for_message("controller/requested_accel", Twist)
+            accel_msg = self.wait_for_requested_accel_msg()
             forces.append(get_accel[axis](accel_msg) * self.inertia[axis])
-            rospy.sleep(0.1)
+            time.sleep(0.1)
 
         publish_velocity[axis](0)
-        rospy.sleep(0.1)
+        time.sleep(0.1)
 
         return np.average(velocities), -np.average(forces)
     
@@ -127,7 +200,9 @@ class CalibrateDragAction(object):
         return np.linalg.lstsq(X,y)[0]
 
     # Set depth in rqt before running action
-    def execute_cb(self, goal):
+    def execute_cb(self, goal_handle: ServerGoalHandle):
+        self.running = True
+
         self.client.update_configuration({
             "linear_x": 0,
             "linear_y": 0,
@@ -144,10 +219,10 @@ class CalibrateDragAction(object):
         })
 
         # Initialize starting position of robot
-        odom_msg = rospy.wait_for_message("odometry/filtered", Odometry)
+        odom_msg = self.wait_for_odometry_msg()
         startYaw = self.get_euler(odom_msg)[2] * 180 / pi
         startPosition = odom_msg.pose.pose.position
-        rospy.loginfo("Starting drag calibration")
+        self.get_logger().info("Starting drag calibration")
 
         linear_params = np.zeros(6)
         quadratic_params = np.zeros(6)
@@ -183,12 +258,12 @@ class CalibrateDragAction(object):
                 velocities.append(velocity)
 
             linear_params[axis], quadratic_params[axis] = self.calculate_parameters(velocities, forces)
-            rospy.loginfo("Linear: %f" % linear_params[axis])
-            rospy.loginfo("Quadratic: %f" % quadratic_params[axis])
+            self.get_logger().info("Linear: %f" % linear_params[axis])
+            self.get_logger().info("Quadratic: %f" % quadratic_params[axis])
 
         self.to_orientation(0, 0, startYaw)
 
-        rospy.loginfo("Drag calibration completed.")
+        self.get_logger().info("Drag calibration completed. New calibration values applied")
 
         self.client.update_configuration({
             "linear_x": linear_params[0],
@@ -207,10 +282,21 @@ class CalibrateDragAction(object):
 
         self._result.linear_drag = linear_params
         self._result.quadratic_drag = quadratic_params
-        self._as.set_succeeded(self._result)
-  
-        
+
+        self.running = False
+        goal_handle.succeed()
+        return self._result
+
+def main(args=None):
+    rclpy.init(args=args)
+
+    thruster_test_action_server = CalibrateDragActionServer()
+
+    executor = MultiThreadedExecutor()
+    rclpy.spin(thruster_test_action_server, executor=executor)
+
+    thruster_test_action_server.destroy()
+    rclpy.shutdown()
+
 if __name__ == '__main__':
-    rospy.init_node('calibrate_drag')
-    server = CalibrateDragAction()
-    rospy.spin()
+    main()

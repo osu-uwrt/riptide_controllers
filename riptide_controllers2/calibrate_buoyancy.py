@@ -3,16 +3,23 @@
 # Determines the buoyancy parameter of the robot.
 # Assumes the robot is upright
 
-import rospy
-import actionlib
-import dynamic_reconfigure.client
+import rclpy
+import time
+import yaml
+from rclpy.action import ActionServer, CancelResponse, GoalResponse
+from rclpy.action.server import ServerGoalHandle
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
+from rclpy.qos import qos_profile_system_default
+from queue import Queue
 
+from riptide_msgs2.action import CalibrateBuoyancy
 from geometry_msgs.msg import Vector3, Quaternion, Twist
 from std_msgs.msg import Empty
 from nav_msgs.msg import Odometry
-import riptide_controllers.msg
 
-from tf.transformations import quaternion_from_euler, euler_from_quaternion, quaternion_inverse, quaternion_multiply
+from transforms3d import euler, quaternions
 
 import math
 import yaml
@@ -33,30 +40,97 @@ def changeFrame(orientation, vector, w2b = True):
 
     vector = np.append(vector, 0)
     if w2b:
-        orientation = quaternion_inverse(orientation)
-    orientationInv = quaternion_inverse(orientation)
-    newVector = quaternion_multiply(orientation, quaternion_multiply(vector, orientationInv))
+        orientation = quaternions.qinverse(orientation)
+    orientationInv = quaternions.qinverse(orientation)
+    newVector = quaternions.qmult(orientation, quaternions.qmult(vector, orientationInv))
     return newVector[:3]
 
 
-class CalibrateBuoyancyAction(object):
+class CalibrateBuoyancyAction(Node):
 
-    _result = riptide_controllers.msg.CalibrateBuoyancyResult()
+    _result = CalibrateBuoyancy.Result()
 
     def __init__(self):
-        self.position_pub = rospy.Publisher("position", Vector3, queue_size=1)
-        self.orientation_pub = rospy.Publisher("orientation", Quaternion, queue_size=1)
-        self.off_pub = rospy.Publisher("off", Empty, queue_size=1)
+        super().__init__('calibrate_buoyancy')
+        self.declare_parameter("vehicle_config", rclpy.Parameter.Type.STRING)
+
+        self.orientation_pub = self.create_publisher(Quaternion ,"orientation", qos_profile_system_default)
+        self.position_pub = self.create_publisher(Vector3 ,"position", qos_profile_system_default)
+        self.off_pub = self.create_publisher(Empty ,"off", qos_profile_system_default)
+        
+        self.odometry_sub = self.create_subscription(Odometry, "odometry/filtered", self.odometry_cb, qos_profile_system_default)
+        self.odometry_queue = Queue(1)
+        self.requested_accel_sub = self.create_subscription(Twist, "controller/requested_accel", self.requested_accel_cb, qos_profile_system_default)
+        self.requested_accel_queue = Queue(1)
 
         # Get the mass and COM
-        with open(rospy.get_param('~vehicle_config'), 'r') as stream:
+        with open(self.get_parameter('vehicle_config').value, 'r') as stream:
             vehicle = yaml.safe_load(stream)
             self.mass = vehicle['mass']
             self.com = np.array(vehicle['com'])
             self.inertia = np.array(vehicle['inertia'])
+
+        self.running = False
+
+        self.client = Client("controller", timeout=30)
+
+        self._action_server = ActionServer(
+            self,
+            CalibrateBuoyancy,
+            'calibrate_buoyancy',
+            self.execute_cb,
+            goal_callback=self.goal_callback,
+            cancel_callback=self.cancel_callback,
+            callback_group=ReentrantCallbackGroup())
+
+    def destroy(self):
+        self.destroy_node()
+        self._action_server.destroy()
+
+    def goal_callback(self, goal_request):
+        """Accept or reject a client request to begin an action."""
+        if self.running:
+            return GoalResponse.REJECT
+        else:
+            self.running = True
+            return GoalResponse.ACCEPT
+
+    def cancel_callback(self, goal):
+        return CancelResponse.REJECT
+
+
+    ##############################
+    # Message Wait Functions
+    ##############################
+
+    def odometry_cb(self, msg: Odometry) -> None:
+        if not self.odometry_queue.full():
+            self.odometry_queue.put_nowait(msg)
+
+    def wait_for_odometry_msg(self) -> Odometry:
+        # Since the queue size is 1, if it has stuff in it just read to clear
+        if not self.odometry_queue.empty():
+            self.odometry_queue.get_nowait()
+            assert self.odometry_queue.empty()
         
-        self._as = actionlib.SimpleActionServer("calibrate_buoyancy", riptide_controllers.msg.CalibrateBuoyancyAction, execute_cb=self.execute_cb, auto_start=False)
-        self._as.start()
+        return self.odometry_queue.get(True)
+
+    def requested_accel_cb(self, msg: Twist) -> None:
+        if not self.requested_accel_queue.full():
+            self.requested_accel_queue.put_nowait(msg)
+
+    def wait_for_requested_accel_msg(self) -> Twist:
+        # Since the queue size is 1, if it has stuff in it just read to clear
+        if not self.requested_accel_queue.empty():
+            self.requested_accel_queue.get_nowait()
+            assert self.requested_accel_queue.empty()
+        
+        return self.requested_accel_queue.get(True)
+
+
+    ##############################
+    # Calibration Functions
+    ##############################
 
     def tune(self, initial_value, get_adjustment, apply_change, num_samples=10, delay=4):
         """Tunes a parameter of the robot"""
@@ -66,13 +140,13 @@ class CalibrateBuoyancyAction(object):
 
         while not np.all(converged):
             # Wait for equilibrium
-            rospy.sleep(delay)
+            time.sleep(delay)
 
             # Average a few samples
             average_adjustment = 0
             for _ in range(num_samples):
                 average_adjustment += get_adjustment() / num_samples
-                rospy.sleep(0.2)
+                time.sleep(0.2)
 
             # Apply change
             current_value += average_adjustment
@@ -90,11 +164,10 @@ class CalibrateBuoyancyAction(object):
       
     def execute_cb(self, goal):
         # Start reconfigure server and get starting config
-        self.client = dynamic_reconfigure.client.Client("controller", timeout=30)
         self.initial_config = self.client.get_configuration()
             
         # Set variables to defaults
-        rospy.loginfo("Starting buoyancy calibration")
+        self.get_logger().info("Starting buoyancy calibration")
         volume = self.mass / WATER_DENSITY
         cob = np.copy(self.com)
 
@@ -119,20 +192,20 @@ class CalibrateBuoyancyAction(object):
         })
 
         # Submerge
-        odom_msg = rospy.wait_for_message("odometry/filtered", Odometry)
+        odom_msg = self.wait_for_odometry_msg()
         current_position = msg_to_numpy(odom_msg.pose.pose.position)
         current_orientation = msg_to_numpy(odom_msg.pose.pose.orientation)
         self.position_pub.publish(Vector3(current_position[0], current_position[1], -1))
-        _, _, y = euler_from_quaternion(current_orientation)
-        self.orientation_pub.publish(Quaternion(*quaternion_from_euler(0, 0, y)))
+        _, _, y = euler.quat2euler(current_orientation, 'sxyz')
+        self.orientation_pub.publish(Quaternion(*euler.euler2quat(0, 0, y, axes='sxyz')))
 
         # Wait for equilibrium
-        rospy.sleep(10)
+        time.sleep(10)
 
         # Volume adjustment function
         def get_volume_adjustment():
-            body_force = self.mass * msg_to_numpy(rospy.wait_for_message("controller/requested_accel", Twist).linear)
-            orientation = msg_to_numpy(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)
+            body_force = self.mass * msg_to_numpy(self.wait_for_requested_accel_msg().linear)
+            orientation = msg_to_numpy(self.wait_for_odometry_msg().pose.pose.orientation)
             world_z_force = changeFrame(orientation, body_force, w2b=False)[2]
 
             return -world_z_force / WATER_DENSITY / GRAVITY
@@ -144,14 +217,14 @@ class CalibrateBuoyancyAction(object):
             lambda v: self.client.update_configuration({"volume": v})
         )
 
-        rospy.loginfo("Volume calibration complete")
+        self.get_logger().info("Volume calibration complete")
         buoyant_force = volume * WATER_DENSITY * GRAVITY
 
         # COB adjustment function
         def get_cob_adjustment():
-            accel = msg_to_numpy(rospy.wait_for_message("controller/requested_accel", Twist).angular)
+            accel = msg_to_numpy(self.wait_for_requested_accel_msg().angular)
             torque = self.inertia * accel
-            orientation = msg_to_numpy(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)
+            orientation = msg_to_numpy(self.wait_for_odometry_msg().pose.pose.orientation)
             body_force_z = changeFrame(orientation, np.array([0, 0, buoyant_force]))[2]
 
             adjustment_x = torque[1] / body_force_z
@@ -168,17 +241,17 @@ class CalibrateBuoyancyAction(object):
             delay = 1
         )
 
-        rospy.loginfo("Buoyancy XY calibration complete")
+        self.get_logger().info("Buoyancy XY calibration complete")
 
         # Adjust orientation
-        self.orientation_pub.publish(Quaternion(*quaternion_from_euler(0, -math.pi / 4, y)))
-        rospy.sleep(3)
+        self.orientation_pub.publish(Quaternion(*euler.euler2quat(0, -math.pi / 4, y, axes='sxyz')))
+        time.sleep(3)
 
         # Z COB function
         def get_cob_z_adjustment():
-            accel = msg_to_numpy(rospy.wait_for_message("controller/requested_accel", Twist).angular)
+            accel = msg_to_numpy(self.wait_for_requested_accel_msg().angular)
             torque = self.inertia * accel
-            orientation = msg_to_numpy(rospy.wait_for_message("odometry/filtered", Odometry).pose.pose.orientation)
+            orientation = msg_to_numpy(self.wait_for_odometry_msg().pose.pose.orientation)
             body_force_x = changeFrame(orientation, np.array([0, 0, buoyant_force]))[0]
 
             adjustment = -torque[1] / body_force_x
@@ -192,7 +265,7 @@ class CalibrateBuoyancyAction(object):
             lambda z: self.client.update_configuration({"center_z": z})
         )
 
-        rospy.loginfo("Calibration complete")
+        self.get_logger().info("Calibration complete")
         self.cleanup()
         self._result.buoyant_force = buoyant_force
         self._result.center_of_buoyancy = cob
@@ -200,7 +273,7 @@ class CalibrateBuoyancyAction(object):
 
     def check_preempted(self):
         if self._as.is_preempt_requested():
-            rospy.loginfo('Preempted Calibration')
+            self.get_logger().info('Preempted Calibration')
             self.cleanup()
             self._as.set_preempted()
             return True
@@ -223,9 +296,16 @@ class CalibrateBuoyancyAction(object):
         self.off_pub.publish()
 
 
-        
-        
+def main(args=None):
+    rclpy.init(args=args)
+
+    thruster_test_action_server = CalibrateBuoyancyAction()
+
+    executor = MultiThreadedExecutor()
+    rclpy.spin(thruster_test_action_server, executor=executor)
+
+    thruster_test_action_server.destroy()
+    rclpy.shutdown()
+
 if __name__ == '__main__':
-    rospy.init_node('calibrate_buoyancy')
-    server = CalibrateBuoyancyAction()
-    rospy.spin()
+    main()

@@ -27,7 +27,9 @@ setup(
             'controller = riptide_controllers2.controller_working:main',
             'thruster_solver = riptide_controllers2.thruster_solver:main',
             'trajectory_tester = riptide_controllers2.trajectory_tester:main',
-            'thruster_test = riptide_controllers2.thruster_test:main'
+            'thruster_test = riptide_controllers2.thruster_test:main',
+            'calibrate_drag = riptide_controllers2.calibrate_drag:main',
+            'calibrate_buoyancy = riptide_controllers2.calibrate_buoyancy:main',
         ],
     },
     py_modules=[
