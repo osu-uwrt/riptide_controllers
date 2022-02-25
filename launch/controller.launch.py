@@ -21,7 +21,7 @@ def generate_launch_description():
     return launch.LaunchDescription([
         DeclareLaunchArgument(
             "robot", 
-            default_value="puddles",
+            default_value="tempest",
             description="Name of the vehicle",
         ),
         DeclareLaunchArgument('robot_yaml', default_value=[LaunchConfiguration("robot"), '.yaml']),
