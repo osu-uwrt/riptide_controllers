@@ -121,8 +121,12 @@ class CalibrateDragActionServer(Node):
             param = Parameter()
             param.name = entry
             param_value = ParameterValue()
-            param_value.type = ParameterType.PARAMETER_DOUBLE
-            param_value.double_value = float(config[entry])
+            if type(config[entry]) == list:
+                param_value.type = ParameterType.PARAMETER_DOUBLE_ARRAY
+                param_value.double_array_value = config[entry]
+            else:
+                param_value.type = ParameterType.PARAMETER_DOUBLE
+                param_value.double_value = float(config[entry])
             param.value = param_value
             parameters.append(param)
         
@@ -162,20 +166,20 @@ class CalibrateDragActionServer(Node):
         r *= pi / 180
         p *= pi / 180
         y *= pi / 180
-        quat = euler.euler2quat(r, p, y, axes='sxyz')
-        self.orientation_pub.publish(Quaternion(*quat))
+        w,x,y,z = euler.euler2quat(r, p, y, axes='sxyz')
+        self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
         time.sleep(5)
 
 
     # Apply force on corresponding axes and record velocities
     def collect_data(self, axis, velocity):
         publish_velocity = [
-            lambda x: self.lin_vel_pub.publish(x, 0, 0),
-            lambda y: self.lin_vel_pub.publish(0, y, 0),
-            lambda z: self.lin_vel_pub.publish(0, 0, z),
-            lambda x: self.ang_vel_pub.publish(x, 0, 0),
-            lambda y: self.ang_vel_pub.publish(0, y, 0),
-            lambda z: self.ang_vel_pub.publish(0, 0, z)
+            lambda x: self.lin_vel_pub.publish(Vector3(x=x,   y=0.0, z=0.0)),
+            lambda y: self.lin_vel_pub.publish(Vector3(x=0.0, y=y,   z=0.0)),
+            lambda z: self.lin_vel_pub.publish(Vector3(x=0.0, y=0.0, z=z  )),
+            lambda x: self.ang_vel_pub.publish(Vector3(x=x,   y=0.0, z=0.0)),
+            lambda y: self.ang_vel_pub.publish(Vector3(x=0.0, y=y,   z=0.0)),
+            lambda z: self.ang_vel_pub.publish(Vector3(x=0.0, y=0.0, z=z  ))
         ]
 
         get_twist = [
@@ -242,18 +246,8 @@ class CalibrateDragActionServer(Node):
         self.running = True
 
         self.update_controller_config({
-            "linear_x": 0,
-            "linear_y": 0,
-            "linear_z": 0,
-            "linear_rot_x": 0,
-            "linear_rot_y": 0,
-            "linear_rot_z": 0,
-            "quadratic_x": 0,
-            "quadratic_y": 0,
-            "quadratic_z": 0,
-            "quadratic_rot_x": 0,
-            "quadratic_rot_y": 0,
-            "quadratic_rot_z": 0
+            "linear_damping": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "quadratic_damping": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         })
 
         # Initialize starting position of robot
@@ -285,7 +279,7 @@ class CalibrateDragActionServer(Node):
         ]
 
         for axis in range(6):
-            self.position_pub.publish(startPosition)
+            self.position_pub.publish(Vector3(x=startPosition.x, y=startPosition.y, z=startPosition.z))
             self.to_orientation(*axes_test_orientations[axis])
 
             forces = []
@@ -304,18 +298,8 @@ class CalibrateDragActionServer(Node):
         self.get_logger().info("Drag calibration completed. New calibration values applied")
 
         self.update_controller_config({
-            "linear_x": linear_params[0],
-            "linear_y": linear_params[1],
-            "linear_z": linear_params[2],
-            "linear_rot_x": linear_params[3],
-            "linear_rot_y": linear_params[4],
-            "linear_rot_z": linear_params[5],
-            "quadratic_x": quadratic_params[0],
-            "quadratic_y": quadratic_params[1],
-            "quadratic_z": quadratic_params[2],
-            "quadratic_rot_x": quadratic_params[3],
-            "quadratic_rot_y": quadratic_params[4],
-            "quadratic_rot_z": quadratic_params[5]
+            "linear_damping": list(linear_params),
+            "quadratic_damping": list(quadratic_params),
         })
 
         self._result.linear_drag = linear_params

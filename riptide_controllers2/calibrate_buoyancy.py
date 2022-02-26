@@ -54,8 +54,7 @@ def changeFrame(orientation, vector, w2b = True):
 class CalibrateBuoyancyAction(Node):
 
     _result = CalibrateBuoyancy.Result()
-    INITIAL_PARAM_NAMES = ['linear_x', 'linear_y', 'linear_z', 'linear_rot_x', 'linear_rot_y', 'linear_rot_z', 
-                 'quadratic_x', 'quadratic_y', 'quadratic_z', 'quadratic_rot_x', 'quadratic_rot_y', 'quadratic_rot_z']
+    INITIAL_PARAM_NAMES = ['volume', 'cob', 'linear_damping', 'quadratic_damping']
 
     def __init__(self):
         super().__init__('calibrate_buoyancy')
@@ -106,7 +105,7 @@ class CalibrateBuoyancyAction(Node):
             return GoalResponse.ACCEPT
 
     def cancel_callback(self, goal):
-        return CancelResponse.REJECT
+        return CancelResponse.ACCEPT
 
 
     ##############################
@@ -145,7 +144,7 @@ class CalibrateBuoyancyAction(Node):
         request.names = self.INITIAL_PARAM_NAMES
         response: GetParameters.Response = self.param_get_client.call(request)
         if len(response.values) != len(self.INITIAL_PARAM_NAMES):
-            self.get_logger().error("Unable to retrieve all requested parameters\nData: %s" % str(response))
+            self.get_logger().error("Unable to retrieve all requested parameters")
             return False
         
         self.initial_config = {}
@@ -160,8 +159,12 @@ class CalibrateBuoyancyAction(Node):
             param = Parameter()
             param.name = entry
             param_value = ParameterValue()
-            param_value.type = ParameterType.PARAMETER_DOUBLE
-            param_value.double_value = float(config[entry])
+            if type(config[entry]) == list:
+                param_value.type = ParameterType.PARAMETER_DOUBLE_ARRAY
+                param_value.double_array_value = config[entry]
+            else:
+                param_value.type = ParameterType.PARAMETER_DOUBLE
+                param_value.double_value = float(config[entry])
             param.value = param_value
             parameters.append(param)
         
@@ -230,30 +233,19 @@ class CalibrateBuoyancyAction(Node):
         # Reset parameters to default
         self.update_controller_config({
             "volume": volume, 
-            "center_x": cob[0], 
-            "center_y": cob[1], 
-            "center_z": cob[2],
-            "linear_x": 0,
-            "linear_y": 0,
-            "linear_z": 0,
-            "linear_rot_x": 0,
-            "linear_rot_y": 0,
-            "linear_rot_z": 0,
-            "quadratic_x": 0,
-            "quadratic_y": 0,
-            "quadratic_z": 0,
-            "quadratic_rot_x": 0,
-            "quadratic_rot_y": 0,
-            "quadratic_rot_z": 0,
+            "cob": list(cob),
+            "linear_damping": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "quadratic_damping": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         })
 
         # Submerge
         odom_msg = self.wait_for_odometry_msg()
         current_position = msg_to_numpy(odom_msg.pose.pose.position)
         current_orientation = msg_to_numpy(odom_msg.pose.pose.orientation)
-        self.position_pub.publish(Vector3(current_position[0], current_position[1], -1))
+        self.position_pub.publish(Vector3(x=current_position[0], y=current_position[1], z=-1.0))
         _, _, y = euler.quat2euler(current_orientation, 'sxyz')
-        self.orientation_pub.publish(Quaternion(*euler.euler2quat(0, 0, y, axes='sxyz')))
+        w,x,y,z = euler.euler2quat(0.0, 0.0, y, axes='sxyz')
+        self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
 
         # Wait for equilibrium
         time.sleep(10)
@@ -294,7 +286,7 @@ class CalibrateBuoyancyAction(Node):
         if self.tune(goal_handle,
             cob[:2], 
             get_cob_adjustment, 
-            lambda cob: self.update_controller_config({"center_x": cob[0], "center_y": cob[1]}),
+            lambda cob: self.update_controller_config({"cob": cob}),
             num_samples = 2,
             delay = 1
         ) == None:
@@ -303,7 +295,8 @@ class CalibrateBuoyancyAction(Node):
         self.get_logger().info("Buoyancy XY calibration complete")
 
         # Adjust orientation
-        self.orientation_pub.publish(Quaternion(*euler.euler2quat(0, -math.pi / 4, y, axes='sxyz')))
+        w,x,y,z = euler.euler2quat(0, -math.pi / 4, y, axes='sxyz')
+        self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
         time.sleep(3)
 
         # Z COB function
@@ -321,7 +314,7 @@ class CalibrateBuoyancyAction(Node):
         if self.tune(goal_handle,
             cob[2], 
             get_cob_z_adjustment, 
-            lambda z: self.update_controller_config({"center_z": z})
+            lambda z: self.update_controller_config({"cob": cob})
         ) == None:
             return CalibrateBuoyancy.Result()
 
@@ -344,20 +337,10 @@ class CalibrateBuoyancyAction(Node):
 
     def cleanup(self):
         self.update_controller_config({
-            "linear_x": self.initial_config['linear_x'],
-            "linear_y": self.initial_config['linear_y'],
-            "linear_z": self.initial_config['linear_z'],
-            "linear_rot_x": self.initial_config['linear_rot_x'],
-            "linear_rot_y": self.initial_config['linear_rot_y'],
-            "linear_rot_z": self.initial_config['linear_rot_z'],
-            "quadratic_x": self.initial_config['quadratic_x'],
-            "quadratic_y": self.initial_config['quadratic_y'],
-            "quadratic_z": self.initial_config['quadratic_z'],
-            "quadratic_rot_x": self.initial_config['quadratic_rot_x'],
-            "quadratic_rot_y": self.initial_config['quadratic_rot_y'],
-            "quadratic_rot_z": self.initial_config['quadratic_rot_z'],
+            "linear_damping": self.initial_config['linear_damping'],
+            "quadratic_damping": self.initial_config['quadratic_damping'],
         })
-        self.off_pub.publish()
+        self.off_pub.publish(Empty())
 
 
 def main(args=None):
