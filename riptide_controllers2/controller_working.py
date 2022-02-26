@@ -56,7 +56,13 @@ class ControllerNode(Node):
 
         with open(config_path, 'r') as stream:
             config = yaml.safe_load(stream)
+        
+        self.linearController = LinearCascadedPController()
+        self.angularController = AngularCascadedPController()
+        self.accelerationCalculator = AccelerationCalculator(config)
             
+        self.add_on_set_parameters_callback(self.parameters_callback)
+        
         # declare the configuration data
         self.declare_parameters(
             namespace='',
@@ -70,35 +76,10 @@ class ControllerNode(Node):
                 ('maximum_linear_velocity', config["maximum_linear_velocity"]),
                 ('maximum_linear_acceleration', config["maximum_linear_acceleration"]),
                 ('maximum_angular_velocity', config["maximum_angular_velocity"]),
-                ('maximum_angular_acceleration', config["maximum_angular_acceleration"])
+                ('maximum_angular_acceleration', config["maximum_angular_acceleration"]),
+                ('volume', config["volume"]),
+                ('cob', config["cob"])
             ]) 
-
-        self.linearController = LinearCascadedPController()
-        self.angularController = AngularCascadedPController()
-        self.accelerationCalculator = AccelerationCalculator(config)
-
-        self.maxLinearVelocity = config["maximum_linear_velocity"]
-        self.maxLinearAcceleration = config["maximum_linear_acceleration"]
-        self.maxAngularVelocity = config["maximum_angular_velocity"]
-        self.maxAngularAcceleration = config["maximum_angular_acceleration"]
-
-        self.linearController.positionP = config["linear_position_p"]
-        self.linearController.velocityP = config["linear_velocity_p"]
-
-        self.angularController.positionP = config["angular_position_p"]
-        self.angularController.velocityP = config["angular_velocity_p"]
-
-        self.accelerationCalculator.linearDrag = config["linear_damping"]
-        self.accelerationCalculator.quadraticDrag = config["quadratic_damping"]    
-
-        self.linearController.maxVelocity = config["maximum_linear_velocity"]
-        self.linearController.maxAccel = config["maximum_linear_acceleration"]
-
-        self.angularController.maxVelocity = config["maximum_angular_velocity"]
-        self.angularController.maxAccel = config["maximum_angular_acceleration"]
-
-        self.accelerationCalculator.buoyancy = np.array([0, 0, config["volume"] * self.accelerationCalculator.density * self.accelerationCalculator.gravity  ])
-        self.accelerationCalculator.cob = config["cob"]
 
         self.lastTorque = None
         self.lastForce = None
@@ -124,20 +105,17 @@ class ControllerNode(Node):
         #create an action server
         self._as = ActionServer(self, FollowTrajectory, "follow_trajectory", self.trajectory_callback)
 
-        # new parameter reconfigure call
-        self.add_on_set_parameters_callback(self.paramUpdateCallback)
-
         self.get_logger().info("Riptide controller initalized")
 
     def parameters_callback(self, params):
         success = True
         for param in params:
             if param.name == "maximum_linear_velocity":
-                self.maxLinearVelocity = param.value
+                self.linearController.maxVelocity = param.value
             elif param.name == "maximum_linear_acceleration":
-                self.maxLinearAcceleration = param.value
+                self.linearController.maxAccel = param.value
             elif param.name == "maximum_angular_velocity":
-                self.maxAngularVelocity = param.value
+                self.angularController.maxVelocity = param.value
             elif param.name == "maximum_angular_acceleration":
                 self.maxAngularAcceleration = param.value
             elif param.name == "linear_position_p":
@@ -226,11 +204,6 @@ class ControllerNode(Node):
         self.angular_controller.setTargetPosition(last_point.transforms[0].rotation)
 
         goal_handle.succeed()
-    
-    def paramUpdateCallback(self, config):
-        pass
-
-        #return config
 
     def turnOff(self, msg=None):
         self.angularController.disable()
