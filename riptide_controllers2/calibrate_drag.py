@@ -10,9 +10,14 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_system_default
 from queue import Queue
 
-from riptide_msgs2.action import CalibrateDrag
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, Vector3, Twist
+from rcl_interfaces.msg import Parameter
+from rcl_interfaces.msg import ParameterType
+from rcl_interfaces.msg import ParameterValue
+from rcl_interfaces.srv import GetParameters
+from rcl_interfaces.srv import SetParameters
+from riptide_msgs2.action import CalibrateDrag
 
 from transforms3d import euler
 from math import pi
@@ -48,7 +53,10 @@ class CalibrateDragActionServer(Node):
 
         self.running = False
 
-        self.client = Client("controller", timeout=30)
+        self.param_get_client = self.create_client(GetParameters, "controller/get_parameters")
+        self.param_set_client = self.create_client(SetParameters, "controller/set_parameters")
+        self.param_get_client.wait_for_service()
+        self.param_set_client.wait_for_service()
 
         self._action_server = ActionServer(
             self,
@@ -102,6 +110,36 @@ class CalibrateDragActionServer(Node):
             assert self.requested_accel_queue.empty()
         
         return self.requested_accel_queue.get(True)
+
+    ##############################
+    # Parameter Utility Functions
+    ##############################
+
+    def update_controller_config(self, config: dict):
+        parameters = []
+        for entry in config:
+            param = Parameter()
+            param.name = entry
+            param_value = ParameterValue()
+            param_value.type = ParameterType.PARAMETER_DOUBLE
+            param_value.double_value = float(config[entry])
+            param.value = param_value
+            parameters.append(param)
+        
+        request = SetParameters.Request()
+        request.parameters = parameters
+        response: SetParameters.Response = self.param_set_client.call(request)
+        
+        if len(response.results) != len(parameters):
+            self.get_logger().error("Unable to set all requested parameters")
+            return False
+        
+        for entry in response.results:
+            if not entry.successful:
+                self.get_logger().error("Failed to set parameter: " + str(entry.reason))
+                return False
+        
+        return True
 
 
     ##############################
@@ -203,7 +241,7 @@ class CalibrateDragActionServer(Node):
     def execute_cb(self, goal_handle: ServerGoalHandle):
         self.running = True
 
-        self.client.update_configuration({
+        self.update_controller_config({
             "linear_x": 0,
             "linear_y": 0,
             "linear_z": 0,
@@ -265,7 +303,7 @@ class CalibrateDragActionServer(Node):
 
         self.get_logger().info("Drag calibration completed. New calibration values applied")
 
-        self.client.update_configuration({
+        self.update_controller_config({
             "linear_x": linear_params[0],
             "linear_y": linear_params[1],
             "linear_z": linear_params[2],

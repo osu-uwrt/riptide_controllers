@@ -14,10 +14,15 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_system_default
 from queue import Queue
 
-from riptide_msgs2.action import CalibrateBuoyancy
 from geometry_msgs.msg import Vector3, Quaternion, Twist
-from std_msgs.msg import Empty
 from nav_msgs.msg import Odometry
+from rcl_interfaces.msg import Parameter
+from rcl_interfaces.msg import ParameterType
+from rcl_interfaces.msg import ParameterValue
+from rcl_interfaces.srv import GetParameters
+from rcl_interfaces.srv import SetParameters
+from riptide_msgs2.action import CalibrateBuoyancy
+from std_msgs.msg import Empty
 
 from transforms3d import euler, quaternions
 
@@ -49,6 +54,8 @@ def changeFrame(orientation, vector, w2b = True):
 class CalibrateBuoyancyAction(Node):
 
     _result = CalibrateBuoyancy.Result()
+    INITIAL_PARAM_NAMES = ['linear_x', 'linear_y', 'linear_z', 'linear_rot_x', 'linear_rot_y', 'linear_rot_z', 
+                 'quadratic_x', 'quadratic_y', 'quadratic_z', 'quadratic_rot_x', 'quadratic_rot_y', 'quadratic_rot_z']
 
     def __init__(self):
         super().__init__('calibrate_buoyancy')
@@ -72,7 +79,10 @@ class CalibrateBuoyancyAction(Node):
 
         self.running = False
 
-        self.client = Client("controller", timeout=30)
+        self.param_get_client = self.create_client(GetParameters, "controller/get_parameters")
+        self.param_set_client = self.create_client(SetParameters, "controller/set_parameters")
+        self.param_get_client.wait_for_service()
+        self.param_set_client.wait_for_service()
 
         self._action_server = ActionServer(
             self,
@@ -127,12 +137,54 @@ class CalibrateBuoyancyAction(Node):
         
         return self.requested_accel_queue.get(True)
 
+    ##############################
+    # Parameter Utility Functions
+    ##############################
+    def load_initial_controller_config(self):
+        request = GetParameters.Request()
+        request.names = self.INITIAL_PARAM_NAMES
+        response: GetParameters.Response = self.param_get_client.call(request)
+        if len(response.values) != len(self.INITIAL_PARAM_NAMES):
+            self.get_logger().error("Unable to retrieve all requested parameters\nData: %s" % str(response))
+            return False
+        
+        self.initial_config = {}
+        for i in range(len(response.values)):
+            self.initial_config[self.INITIAL_PARAM_NAMES[i]] = response.values[i].double_value
+
+        return True
+
+    def update_controller_config(self, config: dict):
+        parameters = []
+        for entry in config:
+            param = Parameter()
+            param.name = entry
+            param_value = ParameterValue()
+            param_value.type = ParameterType.PARAMETER_DOUBLE
+            param_value.double_value = float(config[entry])
+            param.value = param_value
+            parameters.append(param)
+        
+        request = SetParameters.Request()
+        request.parameters = parameters
+        response: SetParameters.Response = self.param_set_client.call(request)
+        
+        if len(response.results) != len(parameters):
+            self.get_logger().error("Unable to set all requested parameters")
+            return False
+        
+        for entry in response.results:
+            if not entry.successful:
+                self.get_logger().error("Failed to set parameter: " + str(entry.reason))
+                return False
+        
+        return True
 
     ##############################
     # Calibration Functions
     ##############################
 
-    def tune(self, initial_value, get_adjustment, apply_change, num_samples=10, delay=4):
+    def tune(self, goal_handle, initial_value, get_adjustment, apply_change, num_samples=10, delay=4):
         """Tunes a parameter of the robot"""
         current_value = np.array(initial_value)
         last_adjustment = np.zeros_like(current_value)
@@ -156,23 +208,27 @@ class CalibrateBuoyancyAction(Node):
             converged = np.logical_or(converged, average_adjustment * last_adjustment < 0)
             last_adjustment = average_adjustment
 
-            if self.check_preempted():
-                return
+            if self.check_preempted(goal_handle):
+                return None
 
         return current_value
 
       
-    def execute_cb(self, goal):
+    def execute_cb(self, goal_handle):
+        self.running = True
         # Start reconfigure server and get starting config
-        self.initial_config = self.client.get_configuration()
-            
+        if not self.load_initial_controller_config():
+            goal_handle.abort()
+            self.running = False
+            return CalibrateBuoyancy.Result()
+        
         # Set variables to defaults
         self.get_logger().info("Starting buoyancy calibration")
         volume = self.mass / WATER_DENSITY
         cob = np.copy(self.com)
 
         # Reset parameters to default
-        self.client.update_configuration({
+        self.update_controller_config({
             "volume": volume, 
             "center_x": cob[0], 
             "center_y": cob[1], 
@@ -211,11 +267,13 @@ class CalibrateBuoyancyAction(Node):
             return -world_z_force / WATER_DENSITY / GRAVITY
 
         # Tune volume
-        volume = self.tune(
+        volume = self.tune(goal_handle,
             volume, 
             get_volume_adjustment, 
-            lambda v: self.client.update_configuration({"volume": v})
+            lambda v: self.update_controller_config({"volume": v})
         )
+        if volume == None:
+            return CalibrateBuoyancy.Result()
 
         self.get_logger().info("Volume calibration complete")
         buoyant_force = volume * WATER_DENSITY * GRAVITY
@@ -233,13 +291,14 @@ class CalibrateBuoyancyAction(Node):
             return np.array([adjustment_x, adjustment_y])
 
         # Tune X and Y COB
-        self.tune(
+        if self.tune(goal_handle,
             cob[:2], 
             get_cob_adjustment, 
-            lambda cob: self.client.update_configuration({"center_x": cob[0], "center_y": cob[1]}),
+            lambda cob: self.update_controller_config({"center_x": cob[0], "center_y": cob[1]}),
             num_samples = 2,
             delay = 1
-        )
+        ) == None:
+            return CalibrateBuoyancy.Result()
 
         self.get_logger().info("Buoyancy XY calibration complete")
 
@@ -259,27 +318,32 @@ class CalibrateBuoyancyAction(Node):
             return adjustment
 
         # Tune Z COB
-        self.tune(
+        if self.tune(goal_handle,
             cob[2], 
             get_cob_z_adjustment, 
-            lambda z: self.client.update_configuration({"center_z": z})
-        )
+            lambda z: self.update_controller_config({"center_z": z})
+        ) == None:
+            return CalibrateBuoyancy.Result()
 
         self.get_logger().info("Calibration complete")
         self.cleanup()
         self._result.buoyant_force = buoyant_force
         self._result.center_of_buoyancy = cob
-        self._as.set_succeeded(self._result)
 
-    def check_preempted(self):
-        if self._as.is_preempt_requested():
+        self.running = False
+        goal_handle.succeed()
+        return self._result
+
+    def check_preempted(self, goal_handle):
+        if goal_handle.is_cancel_requested:
             self.get_logger().info('Preempted Calibration')
             self.cleanup()
-            self._as.set_preempted()
+            goal_handle.canceled()
+            self.running = False
             return True
 
     def cleanup(self):
-        self.client.update_configuration({
+        self.update_controller_config({
             "linear_x": self.initial_config['linear_x'],
             "linear_y": self.initial_config['linear_y'],
             "linear_z": self.initial_config['linear_z'],
