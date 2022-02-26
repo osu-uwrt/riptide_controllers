@@ -134,23 +134,43 @@ class ControllerNode(Node):
         self.get_logger().info("Riptide controller initalized")
 
     def parameters_callback(self, params):
-        success = False
+        success = True
         for param in params:
-            if param.name == "camera_device_port":
-                if param.type_ == Parameter.Type.STRING:
-                    if param.value.startswith('/dev/tty'):
-                        success = True
-                        self.camera_device_port_ = param.value
-                        self.restart_camera = True
-            if param.name == "battery_percentage_warning":
-                if param.type_ in [Parameter.Type.DOUBLE, Parameter.Type.INTEGER]:
-                    if param.value >= 0.0 and param.value < 100.0:
-                        success = True
-                        self.battery_percentage_warning_ = param.value
-            if param.name == "simulation_mode":
-                if param.type_ == Parameter.Type.BOOL:
-                    success = True
-                    self.simulation_mode_ = param.value
+            if param.name == "maximum_linear_velocity":
+                self.maxLinearVelocity = param.value
+            elif param.name == "maximum_linear_acceleration":
+                self.maxLinearAcceleration = param.value
+            elif param.name == "maximum_angular_velocity":
+                self.maxAngularVelocity = param.value
+            elif param.name == "maximum_angular_acceleration":
+                self.maxAngularAcceleration = param.value
+            elif param.name == "linear_position_p":
+                self.linearController.positionP = param.value
+            elif param.name == "linear_velocity_p":
+                self.linearController.velocityP = param.value
+            elif param.name == "angular_position_p":
+                self.angularController.positionP = param.value
+            elif param.name == "angular_velocity_p":
+                self.angularController.velocityP = param.value
+            elif param.name == "linear_damping":
+                self.accelerationCalculator.linearDrag = param.value
+            elif param.name == "quadratic_damping":
+                self.accelerationCalculator.quadraticDrag = param.value
+            elif param.name == "maximum_linear_velocity":
+                self.linearController.maxVelocity = param.value
+            elif param.name == "maximum_linear_acceleration":
+                self.linearController.maxAccel = param.value
+            elif param.name == "maximum_angular_velocity":
+                self.angularController.maxVelocity = param.value
+            elif param.name == "maximum_angular_acceleration":
+                self.angularController.maxAccel = param.value
+            elif param.name == "volume":
+                self.accelerationCalculator.buoyancy = np.array([0, 0, param.value * self.accelerationCalculator.density * self.accelerationCalculator.gravity  ])
+            elif param.name == "cob":
+                self.accelerationCalculator.cob = param.value
+            else:
+                success = False
+                
         return SetParametersResult(successful=success)
 
 
