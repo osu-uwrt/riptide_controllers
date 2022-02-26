@@ -1,8 +1,9 @@
 import numpy as np
-import transforms3d as tf3d
+# import transforms3d as tf3d
 from abc import ABC, abstractmethod
 from nav_msgs.msg import Odometry
-from transforms3d._gohlketransforms import quaternion_slerp
+# from transforms3d._gohlketransforms import quaternion_slerp
+from  tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_slerp
 
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
@@ -25,8 +26,10 @@ def worldToBody(orientation, vector):
     """
 
     vector = np.append(vector, 0)
-    orientationInv = tf3d.quaternions.qinverse(orientation)
-    newVector = tf3d.quaternions.qmult(orientationInv, tf3d.quaternions.qmult(vector, orientation))
+    # orientationInv = tf3d.quaternions.qinverse(orientation)
+    orientationInv = quaternion_inverse(orientation)
+    # newVector = tf3d.quaternions.qmult(orientationInv, tf3d.quaternions.qmult(vector, orientation))
+    newVector = quaternion_multiply(orientationInv, quaternion_multiply(vector, orientation))
     return newVector[:3]
 
 def applyMax(vector, max_vector):
@@ -227,7 +230,8 @@ class AngularCascadedPController(CascadedPController):
             # Below code only works for small angles so lets find an orientation in the right direction but with a small angle
             intermediateOrientation = quaternion_slerp(currentOrientation, self.targetPosition, 0.01)
             dq = (intermediateOrientation - currentOrientation)
-            outputVel = tf3d.quaternions.qmult(tf3d.quaternions.qinverse(currentOrientation), dq)[:3] * self.positionP
+            print("left_value: {0} - right_value: {1}".format(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3], self.positionP))
+            outputVel = np.array(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3]) * self.positionP
             return outputVel        
         else:
             return np.zeros(3)
