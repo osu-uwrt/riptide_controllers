@@ -230,7 +230,6 @@ class AngularCascadedPController(CascadedPController):
             # Below code only works for small angles so lets find an orientation in the right direction but with a small angle
             intermediateOrientation = quaternion_slerp(currentOrientation, self.targetPosition, 0.01)
             dq = (intermediateOrientation - currentOrientation)
-            print("left_value: {0} - right_value: {1}".format(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3], self.positionP))
             outputVel = np.array(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3]) * self.positionP
             return outputVel        
         else:
