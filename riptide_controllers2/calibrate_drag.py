@@ -41,7 +41,7 @@ class CalibrateDragActionServer(Node):
         
         self.odometry_sub = self.create_subscription(Odometry, "odometry/filtered", self.odometry_cb, qos_profile_system_default)
         self.odometry_queue = Queue(1)
-        self.requested_accel_sub = self.create_subscription(Twist, "controller/requested_accel", self.requested_accel_cb, qos_profile_system_default)
+        self.requested_accel_sub = self.create_subscription(Twist, "requested_accel", self.requested_accel_cb, qos_profile_system_default)
         self.requested_accel_queue = Queue(1)
 
         # Get the mass and COM
@@ -201,7 +201,7 @@ class CalibrateDragActionServer(Node):
         ]
 
         
-        publish_velocity[axis](velocity)
+        publish_velocity[axis](float(velocity))
 
         time.sleep(1)
         last_vel = 0
@@ -229,7 +229,7 @@ class CalibrateDragActionServer(Node):
             forces.append(get_accel[axis](accel_msg) * self.inertia[axis])
             time.sleep(0.1)
 
-        publish_velocity[axis](0)
+        publish_velocity[axis](0.0)
         time.sleep(0.1)
 
         return np.average(velocities), -np.average(forces)
@@ -302,8 +302,8 @@ class CalibrateDragActionServer(Node):
             "quadratic_damping": list(quadratic_params),
         })
 
-        self._result.linear_drag = linear_params
-        self._result.quadratic_drag = quadratic_params
+        self._result.linear_drag = list(linear_params)
+        self._result.quadratic_drag = list(quadratic_params)
 
         self.running = False
         goal_handle.succeed()

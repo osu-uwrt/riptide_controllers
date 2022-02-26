@@ -3,6 +3,7 @@
 # Determines the buoyancy parameter of the robot.
 # Assumes the robot is upright
 
+from asyncio import current_task
 import rclpy
 import time
 import yaml
@@ -24,7 +25,7 @@ from rcl_interfaces.srv import SetParameters
 from riptide_msgs2.action import CalibrateBuoyancy
 from std_msgs.msg import Empty
 
-from transforms3d import euler, quaternions
+from tf_transformations import quaternion_from_euler, euler_from_quaternion, quaternion_inverse, quaternion_multiply
 
 import math
 import yaml
@@ -45,9 +46,9 @@ def changeFrame(orientation, vector, w2b = True):
 
     vector = np.append(vector, 0)
     if w2b:
-        orientation = quaternions.qinverse(orientation)
-    orientationInv = quaternions.qinverse(orientation)
-    newVector = quaternions.qmult(orientation, quaternions.qmult(vector, orientationInv))
+        orientation = quaternion_inverse(orientation)
+    orientationInv = quaternion_inverse(orientation)
+    newVector = quaternion_multiply(orientation, quaternion_multiply(vector, orientationInv))
     return newVector[:3]
 
 
@@ -66,7 +67,7 @@ class CalibrateBuoyancyAction(Node):
         
         self.odometry_sub = self.create_subscription(Odometry, "odometry/filtered", self.odometry_cb, qos_profile_system_default)
         self.odometry_queue = Queue(1)
-        self.requested_accel_sub = self.create_subscription(Twist, "controller/requested_accel", self.requested_accel_cb, qos_profile_system_default)
+        self.requested_accel_sub = self.create_subscription(Twist, "requested_accel", self.requested_accel_cb, qos_profile_system_default)
         self.requested_accel_queue = Queue(1)
 
         # Get the mass and COM
@@ -149,7 +150,10 @@ class CalibrateBuoyancyAction(Node):
         
         self.initial_config = {}
         for i in range(len(response.values)):
-            self.initial_config[self.INITIAL_PARAM_NAMES[i]] = response.values[i].double_value
+            if response.values[i].type == ParameterType.PARAMETER_DOUBLE_ARRAY:
+                self.initial_config[self.INITIAL_PARAM_NAMES[i]] = list(response.values[i].double_array_value)
+            else:
+                self.initial_config[self.INITIAL_PARAM_NAMES[i]] = response.values[i].double_value
 
         return True
 
@@ -161,7 +165,7 @@ class CalibrateBuoyancyAction(Node):
             param_value = ParameterValue()
             if type(config[entry]) == list:
                 param_value.type = ParameterType.PARAMETER_DOUBLE_ARRAY
-                param_value.double_array_value = config[entry]
+                param_value.double_array_value = list(map(float, config[entry]))
             else:
                 param_value.type = ParameterType.PARAMETER_DOUBLE
                 param_value.double_value = float(config[entry])
@@ -243,8 +247,8 @@ class CalibrateBuoyancyAction(Node):
         current_position = msg_to_numpy(odom_msg.pose.pose.position)
         current_orientation = msg_to_numpy(odom_msg.pose.pose.orientation)
         self.position_pub.publish(Vector3(x=current_position[0], y=current_position[1], z=-1.0))
-        _, _, y = euler.quat2euler(current_orientation, 'sxyz')
-        w,x,y,z = euler.euler2quat(0.0, 0.0, y, axes='sxyz')
+        _, _, yaw = euler_from_quaternion(current_orientation)
+        x,y,z,w = quaternion_from_euler(0, 0, yaw)
         self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
 
         # Wait for equilibrium
@@ -286,16 +290,16 @@ class CalibrateBuoyancyAction(Node):
         if self.tune(goal_handle,
             cob[:2], 
             get_cob_adjustment, 
-            lambda cob: self.update_controller_config({"cob": cob}),
+            lambda cob_local: self.update_controller_config({"cob": [cob_local[0], cob_local[1], cob[2]]}),
             num_samples = 2,
             delay = 1
-        ) == None:
+        ) is None:
             return CalibrateBuoyancy.Result()
 
         self.get_logger().info("Buoyancy XY calibration complete")
 
         # Adjust orientation
-        w,x,y,z = euler.euler2quat(0, -math.pi / 4, y, axes='sxyz')
+        x,y,z,w = quaternion_from_euler(0, -math.pi / 4, yaw)
         self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
         time.sleep(3)
 
@@ -314,14 +318,20 @@ class CalibrateBuoyancyAction(Node):
         if self.tune(goal_handle,
             cob[2], 
             get_cob_z_adjustment, 
-            lambda z: self.update_controller_config({"cob": cob})
-        ) == None:
+            lambda z: self.update_controller_config({"cob": [cob[0], cob[1], z]})
+        ) is None:
             return CalibrateBuoyancy.Result()
 
-        self.get_logger().info("Calibration complete")
-        self.cleanup()
-        self._result.buoyant_force = buoyant_force
-        self._result.center_of_buoyancy = cob
+        try:
+            self.get_logger().info("Calibration complete")
+            self.cleanup()
+            self._result.buoyant_force = buoyant_force
+            self._result.center_of_buoyancy = list(cob)
+        except:
+            import traceback
+            tb = traceback.format_exc()
+            self.get_logger().warn("Crashed: %s" % str(tb))
+            raise
 
         self.running = False
         goal_handle.succeed()

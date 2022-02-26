@@ -117,7 +117,7 @@ class ControllerNode(Node):
             elif param.name == "maximum_angular_velocity":
                 self.angularController.maxVelocity = param.value
             elif param.name == "maximum_angular_acceleration":
-                self.maxAngularAcceleration = param.value
+                self.angularController.maxAccel = param.value
             elif param.name == "linear_position_p":
                 self.linearController.positionP = param.value
             elif param.name == "linear_velocity_p":
