@@ -2,6 +2,7 @@ import numpy as np
 import transforms3d as tf3d
 from abc import ABC, abstractmethod
 from nav_msgs.msg import Odometry
+from transforms3d._gohlketransforms import quaternion_slerp
 
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
@@ -50,9 +51,9 @@ def applyMax(vector, max_vector):
 
     return vector * scale
 
-def slerp(one, two, t):
-    """Spherical Linear intERPolation."""
-    return tf3d.quaternions.qmult(tf3d.quaternions.qmult(two, tf3d.quaternions.qinverse(one))**t, one)
+# def slerp(one, two, t):
+#     """Spherical Linear intERPolation."""
+#     return tf3d.quaternions.qmult(tf3d.quaternions.qmult(two, tf3d.quaternions.qinverse(one))**t, one)
 
 
 class CascadedPController(ABC):
@@ -224,7 +225,7 @@ class AngularCascadedPController(CascadedPController):
             currentOrientation = msgToNumpy(odom.pose.pose.orientation)
 
             # Below code only works for small angles so lets find an orientation in the right direction but with a small angle
-            intermediateOrientation = slerp(currentOrientation, self.targetPosition, 0.01)
+            intermediateOrientation = quaternion_slerp(currentOrientation, self.targetPosition, 0.01)
             dq = (intermediateOrientation - currentOrientation)
             outputVel = tf3d.quaternions.qmult(tf3d.quaternions.qinverse(currentOrientation), dq)[:3] * self.positionP
             return outputVel        
