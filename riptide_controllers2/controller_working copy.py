@@ -37,9 +37,6 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, Vector3, Twist
 from std_msgs.msg import Empty, Bool
 
-from rclpy.parameter import Parameter
-from rcl_interfaces.msg import SetParametersResult
-
 # assumes order is xyz
 def vect3_from_np(np_vect):
     return Vector3(x=np_vect[0], y=np_vect[1], z=np_vect[2])
@@ -56,26 +53,6 @@ class ControllerNode(Node):
 
         with open(config_path, 'r') as stream:
             config = yaml.safe_load(stream)
-            
-        # declare the configuration data
-        self.declare_parameters(
-            namespace='',
-            parameters=[
-                ('maxLinearVelocity', config["maximum_linear_velocity"]),
-                ('maxLinearAcceleration', config["maximum_linear_acceleration"]),
-                ('maxAngularVelocity', config["maximum_angular_velocity"]),
-                ('maxAngularAcceleration', config["maximum_angular_acceleration"]),
-                ('linear_position_p', config["linear_position_p"]),
-                ('linear_velocity_p', config["linear_velocity_p"]),
-                ('angular_position_p', config["angular_position_p"]),
-                ('angular_velocity_p', config["angular_velocity_p"]),
-                ('linear_damping', config["linear_damping"]),
-                ('quadratic_damping', config["quadratic_damping"] ),
-                ('maximum_linear_velocity', config["maximum_linear_velocity"]),
-                ('maximum_linear_acceleration', config["maximum_linear_acceleration"]),
-                ('maximum_angular_velocity', config["maximum_angular_velocity"]),
-                ('maximum_angular_acceleration', config["maximum_angular_acceleration"])
-            ]) 
 
         self.linearController = LinearCascadedPController()
         self.angularController = AngularCascadedPController()
@@ -132,47 +109,6 @@ class ControllerNode(Node):
         self.add_on_set_parameters_callback(self.paramUpdateCallback)
 
         self.get_logger().info("Riptide controller initalized")
-
-    def parameters_callback(self, params):
-        success = True
-        for param in params:
-            if param.name == "maximum_linear_velocity":
-                self.maxLinearVelocity = param.value
-            elif param.name == "maximum_linear_acceleration":
-                self.maxLinearAcceleration = param.value
-            elif param.name == "maximum_angular_velocity":
-                self.maxAngularVelocity = param.value
-            elif param.name == "maximum_angular_acceleration":
-                self.maxAngularAcceleration = param.value
-            elif param.name == "linear_position_p":
-                self.linearController.positionP = param.value
-            elif param.name == "linear_velocity_p":
-                self.linearController.velocityP = param.value
-            elif param.name == "angular_position_p":
-                self.angularController.positionP = param.value
-            elif param.name == "angular_velocity_p":
-                self.angularController.velocityP = param.value
-            elif param.name == "linear_damping":
-                self.accelerationCalculator.linearDrag = param.value
-            elif param.name == "quadratic_damping":
-                self.accelerationCalculator.quadraticDrag = param.value
-            elif param.name == "maximum_linear_velocity":
-                self.linearController.maxVelocity = param.value
-            elif param.name == "maximum_linear_acceleration":
-                self.linearController.maxAccel = param.value
-            elif param.name == "maximum_angular_velocity":
-                self.angularController.maxVelocity = param.value
-            elif param.name == "maximum_angular_acceleration":
-                self.angularController.maxAccel = param.value
-            elif param.name == "volume":
-                self.accelerationCalculator.buoyancy = np.array([0, 0, param.value * self.accelerationCalculator.density * self.accelerationCalculator.gravity  ])
-            elif param.name == "cob":
-                self.accelerationCalculator.cob = param.value
-            else:
-                success = False
-                
-        return SetParametersResult(successful=success)
-
 
     def updateState(self, odomMsg):        
         linearAccel = self.linearController.update(odomMsg)
