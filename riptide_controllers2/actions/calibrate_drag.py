@@ -166,7 +166,7 @@ class CalibrateDragActionServer(Node):
         r *= pi / 180
         p *= pi / 180
         y *= pi / 180
-        w,x,y,z = euler.euler2quat(r, p, y, axes='sxyz')
+        w,x,y,z = euler.euler2quat(r, p, y, axes='rpy')
         self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
         time.sleep(5)
 
