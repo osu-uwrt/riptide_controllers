@@ -206,6 +206,9 @@ class ThrusterSolverNode(Node):
 
         data = []
         for val in res.x :
+            if abs(val) < self.pwm_file["MIN_THRUST"]:
+                val = 0
+            
             data.append(float(val))
 
         msg = Float32MultiArray()

@@ -155,7 +155,7 @@ class CalibrateDragActionServer(Node):
     # RPY in radians
     def get_euler(self, odom_msg):
         quat = odom_msg.pose.pose.orientation
-        quat = [quat.x, quat.y, quat.z, quat.w]
+        quat = [quat.w, quat.x, quat.y, quat.z]
         return euler.quat2euler(quat, 'sxyz')
 
     def restrict_angle(self, angle):
@@ -166,7 +166,7 @@ class CalibrateDragActionServer(Node):
         r *= pi / 180
         p *= pi / 180
         y *= pi / 180
-        w,x,y,z = euler.euler2quat(r, p, y, axes='rpy')
+        w,x,y,z = euler.euler2quat(r, p, y, axes='sxyz')
         self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
         time.sleep(5)
 

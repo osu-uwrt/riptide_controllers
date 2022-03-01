@@ -50,6 +50,17 @@ def generate_launch_description():
 
         launch_ros.actions.Node(
             package="riptide_controllers2",
+            executable="thruster_wrench_publisher",
+            name="thruster_wrench_publisher",
+            output="screen",
+            parameters=[
+                {"vehicle_config": config},
+                {"robot": robot},
+            ]
+        ),
+
+        launch_ros.actions.Node(
+            package="riptide_controllers2",
             executable="thruster_test",
             name="thruster_test",
             output="screen",

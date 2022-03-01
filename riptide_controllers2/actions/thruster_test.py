@@ -6,14 +6,21 @@ from rclpy.action.server import ServerGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import qos_profile_sensor_data, qos_profile_system_default
 
 from riptide_msgs2.msg import PwmStamped
 from riptide_msgs2.action import ThrusterTest
+from std_msgs.msg import Float32MultiArray
 
 import yaml
 
 import time
+
+# The force value to publish to thruster_forces
+# This is added primarily for visualization, so the thruster can be viewed in rviz during testing
+# hopefully allowing diagnosing of any thruster positioning/directionality issues
+THRUSTER_TEST_FORCE = 1.3333
+THRUSTER_NEUTRAL_FORCE = 0.0
 
 NEUTRAL_PWM = 1500
 POSITIVE_PWM = 1550
@@ -27,12 +34,12 @@ class ThrusterTestActionServer(Node):
         self.declare_parameter("vehicle_config", rclpy.Parameter.Type.STRING)
 
         self.pwm_pub = self.create_publisher(PwmStamped ,"command/pwm", qos_profile_sensor_data)
+        self.thruster_forces_pub = self.create_publisher(Float32MultiArray ,"thruster_forces", qos_profile_system_default)
 
         # Get the mass and COM
         with open(self.get_parameter('vehicle_config').value, 'r') as stream:
             self.vehicle_file = yaml.safe_load(stream)
             self.num_thrusters = len(self.vehicle_file["thrusters"])
-            self.max_force = self.vehicle_file["thruster"]["max_force"]
 
         self.running = False
 
@@ -70,22 +77,33 @@ class ThrusterTestActionServer(Node):
         msg.pwm = pwm
         self.pwm_pub.publish(msg)
 
+    def publish_forces(self, forces):
+        msg = Float32MultiArray()
+        msg.data = forces
+        self.thruster_forces_pub.publish(msg)
+
     def execute_cb(self, goal_handle: ServerGoalHandle):
         self.get_logger().info("Starting ThrusterTest Action")
         pwm = [NEUTRAL_PWM] * self.num_thrusters
+        thruster_forces = [THRUSTER_NEUTRAL_FORCE] * self.num_thrusters
+
         while True:
             for i in range(self.num_thrusters):
                 if goal_handle.is_cancel_requested:
                     self.get_logger().info('Preempted ThrusterTest Action')
                     self.publish_pwm([NEUTRAL_PWM] * self.num_thrusters)
+                    self.publish_forces([THRUSTER_NEUTRAL_FORCE] * self.num_thrusters)
 
                     self.running = False
                     goal_handle.canceled()
                     return ThrusterTest.Result()
 
                 thruster_type = self.vehicle_file["thrusters"][i]["type"]
+                thruster_name = self.vehicle_file["thrusters"][i]["name"]
 
-                self.get_logger().info(f'Testing Thruster {i+1}')
+                self.get_logger().info(f'Testing {thruster_name} Thruster ({i+1})')
+
+                thruster_forces[i] = THRUSTER_TEST_FORCE
                 if thruster_type == 0:
                     pwm[i] = POSITIVE_PWM
                 else:
@@ -93,9 +111,11 @@ class ThrusterTestActionServer(Node):
 
                 for _ in range(300):
                     self.publish_pwm(pwm)
+                    self.publish_forces(thruster_forces)
                     time.sleep(0.01)
                 
                 pwm[i] = NEUTRAL_PWM
+                thruster_forces[i] = THRUSTER_NEUTRAL_FORCE
 
         #should never reach this point in the code
         self.get_logger().info("ThrustTest succeeded")
