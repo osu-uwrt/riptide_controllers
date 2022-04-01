@@ -21,6 +21,7 @@ from riptide_msgs2.action import CalibrateDrag
 
 from transforms3d import euler
 from math import pi
+from math import sqrt
 import numpy as np
 
 # Z axis is a little off, load interia from puddles.yaml, and update dynamic reconfigure
@@ -88,8 +89,10 @@ class CalibrateDragActionServer(Node):
     ##############################
 
     def odometry_cb(self, msg):
-        if not self.odometry_queue.full():
-            self.odometry_queue.put_nowait(msg)
+        if self.odometry_queue.full():
+            self.odometry_queue.get_nowait()
+            
+        self.odometry_queue.put_nowait(msg)
 
     def wait_for_odometry_msg(self):
         # Since the queue size is 1, if it has stuff in it just read to clear
@@ -110,7 +113,8 @@ class CalibrateDragActionServer(Node):
             assert self.requested_accel_queue.empty()
         
         return self.requested_accel_queue.get(True)
-
+        
+        
     ##############################
     # Parameter Utility Functions
     ##############################
@@ -118,6 +122,7 @@ class CalibrateDragActionServer(Node):
     def update_controller_config(self, config: dict):
         parameters = []
         for entry in config:
+            self.get_logger().info("setting entry {}".format(entry))
             param = Parameter()
             param.name = entry
             param_value = ParameterValue()
@@ -130,19 +135,26 @@ class CalibrateDragActionServer(Node):
             param.value = param_value
             parameters.append(param)
         
+        self.get_logger().info("making request")
         request = SetParameters.Request()
         request.parameters = parameters
+        
+        self.get_logger().info("making call")
         response: SetParameters.Response = self.param_set_client.call(request)
+        self.get_logger().info("made call")
         
         if len(response.results) != len(parameters):
             self.get_logger().error("Unable to set all requested parameters")
             return False
+        
+        self.get_logger().info("checking")
         
         for entry in response.results:
             if not entry.successful:
                 self.get_logger().error("Failed to set parameter: " + str(entry.reason))
                 return False
         
+        self.get_logger().info("finished")
         return True
 
 
@@ -157,6 +169,14 @@ class CalibrateDragActionServer(Node):
         quat = odom_msg.pose.pose.orientation
         quat = [quat.w, quat.x, quat.y, quat.z]
         return euler.quat2euler(quat, 'sxyz')
+    
+    #computes the distance between two Vector3s.
+    def distance(self, v1, v2):
+        x = v2.x - v1.x
+        y = v2.y - v1.y
+        z = v2.z - v1.z
+        
+        return sqrt(x * x + y * y + z * z)
 
     def restrict_angle(self, angle):
         return ((angle + 180) % 360 ) - 180
@@ -169,7 +189,18 @@ class CalibrateDragActionServer(Node):
         w,x,y,z = euler.euler2quat(r, p, y, axes='sxyz')
         self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
         time.sleep(5)
-
+        
+        
+    def to_position(self, x, y, z):
+        targetPos = Vector3(x=x, y=y, z=z)
+        self.position_pub.publish(targetPos)
+        
+        startTime = self.get_clock().now()
+        
+        #block until either position is acheived or 30 seconds elapses
+        while(self.distance(targetPos, self.wait_for_odometry_msg().pose.pose.position) > 0.2 and (self.get_clock().now() - startTime).nanoseconds < 3e10):            
+            time.sleep(1)
+        
 
     # Apply force on corresponding axes and record velocities
     def collect_data(self, axis, velocity):
@@ -279,7 +310,7 @@ class CalibrateDragActionServer(Node):
         ]
 
         for axis in range(6):
-            self.position_pub.publish(Vector3(x=startPosition.x, y=startPosition.y, z=startPosition.z))
+            self.to_position(x=startPosition.x, y=startPosition.y, z=startPosition.z)
             self.to_orientation(*axes_test_orientations[axis])
 
             forces = []
@@ -307,6 +338,7 @@ class CalibrateDragActionServer(Node):
 
         self.running = False
         goal_handle.succeed()
+        self.get_logger().info("Drag calibration returning result.")
         return self._result
 
 def main(args=None):
