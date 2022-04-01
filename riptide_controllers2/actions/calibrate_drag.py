@@ -103,8 +103,13 @@ class CalibrateDragActionServer(Node):
         return self.odometry_queue.get(True)
 
     def requested_accel_cb(self, msg):
-        if not self.requested_accel_queue.full():
-            self.requested_accel_queue.put_nowait(msg)
+        # if not self.requested_accel_queue.full():
+        #     self.requested_accel_queue.put_nowait(msg)
+        
+        if self.requested_accel_queue.full():
+            self.requested_accel_queue.get_nowait()
+            
+        self.requested_accel_queue.put_nowait(msg)
 
     def wait_for_requested_accel_msg(self):
         # Since the queue size is 1, if it has stuff in it just read to clear
@@ -122,7 +127,6 @@ class CalibrateDragActionServer(Node):
     def update_controller_config(self, config: dict):
         parameters = []
         for entry in config:
-            self.get_logger().info("setting entry {}".format(entry))
             param = Parameter()
             param.name = entry
             param_value = ParameterValue()
@@ -135,26 +139,21 @@ class CalibrateDragActionServer(Node):
             param.value = param_value
             parameters.append(param)
         
-        self.get_logger().info("making request")
         request = SetParameters.Request()
         request.parameters = parameters
         
-        self.get_logger().info("making call")
         response: SetParameters.Response = self.param_set_client.call(request)
-        self.get_logger().info("made call")
         
         if len(response.results) != len(parameters):
             self.get_logger().error("Unable to set all requested parameters")
             return False
         
-        self.get_logger().info("checking")
         
         for entry in response.results:
             if not entry.successful:
                 self.get_logger().error("Failed to set parameter: " + str(entry.reason))
                 return False
         
-        self.get_logger().info("finished")
         return True
 
 
@@ -338,7 +337,6 @@ class CalibrateDragActionServer(Node):
 
         self.running = False
         goal_handle.succeed()
-        self.get_logger().info("Drag calibration returning result.")
         return self._result
 
 def main(args=None):
