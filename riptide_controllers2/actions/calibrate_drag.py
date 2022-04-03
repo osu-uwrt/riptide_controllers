@@ -199,6 +199,14 @@ class CalibrateDragActionServer(Node):
         #block until either position is acheived or 30 seconds elapses
         while(self.distance(targetPos, self.wait_for_odometry_msg().pose.pose.position) > 0.2 and (self.get_clock().now() - startTime).nanoseconds < 3e10):            
             time.sleep(1)
+            
+    def correct_depth(self, z):
+        odom = self.wait_for_odometry_msg()
+        x = odom.pose.pose.position.x
+        y = odom.pose.pose.position.y
+        
+        #move robot to current xy position at desired depth
+        self.to_position(x=x, y=y, z=z)
         
 
     # Apply force on corresponding axes and record velocities
@@ -318,6 +326,9 @@ class CalibrateDragActionServer(Node):
                 velocity, force = self.collect_data(axis, requested_velocity)
                 forces.append(force)
                 velocities.append(velocity)
+                
+                #move robot to correct depth
+                self.correct_depth(startPosition.z)
 
             linear_params[axis], quadratic_params[axis] = self.calculate_parameters(velocities, forces)
             self.get_logger().info("Linear: %f" % linear_params[axis])
