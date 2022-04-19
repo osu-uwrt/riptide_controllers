@@ -67,18 +67,46 @@ class ControllerNode(Node):
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('linear_position_p', config["linear_position_p"]),
-                ('linear_velocity_p', config["linear_velocity_p"]),
-                ('angular_position_p', config["angular_position_p"]),
-                ('angular_velocity_p', config["angular_velocity_p"]),
-                ('linear_damping', config["linear_damping"]),
-                ('quadratic_damping', config["quadratic_damping"]),
-                ('maximum_linear_velocity', config["maximum_linear_velocity"]),
-                ('maximum_linear_acceleration', config["maximum_linear_acceleration"]),
-                ('maximum_angular_velocity', config["maximum_angular_velocity"]),
-                ('maximum_angular_acceleration', config["maximum_angular_acceleration"]),
+                ('linear_position_p_x', config["linear_position_p"][0]),
+                ('linear_position_p_y', config["linear_position_p"][1]),
+                ('linear_position_p_z', config["linear_position_p"][2]),
+                ('linear_velocity_p_x', config["linear_velocity_p"][0]),
+                ('linear_velocity_p_y', config["linear_velocity_p"][1]),
+                ('linear_velocity_p_z', config["linear_velocity_p"][2]),
+                ('angular_position_p_x', config["angular_position_p"][0]),
+                ('angular_position_p_y', config["angular_position_p"][1]),
+                ('angular_position_p_z', config["angular_position_p"][2]),
+                ('angular_velocity_p_x', config["angular_velocity_p"][0]),
+                ('angular_velocity_p_y', config["angular_velocity_p"][1]),
+                ('angular_velocity_p_z', config["angular_velocity_p"][2]),
+                ('linear_damping_x', config["linear_damping"][0]),
+                ('linear_damping_y', config["linear_damping"][1]),
+                ('linear_damping_z', config["linear_damping"][2]),
+                ('linear_damping_rot_x', config["linear_damping"][3]),
+                ('linear_damping_rot_y', config["linear_damping"][4]),
+                ('linear_damping_rot_z', config["linear_damping"][5]),
+                ('quadratic_damping_x', config["quadratic_damping"][0]),
+                ('quadratic_damping_y', config["quadratic_damping"][1]),
+                ('quadratic_damping_z', config["quadratic_damping"][2]),
+                ('quadratic_damping_rot_x', config["quadratic_damping"][3]),
+                ('quadratic_damping_rot_y', config["quadratic_damping"][4]),
+                ('quadratic_damping_rot_z', config["quadratic_damping"][5]),
+                ('maximum_linear_velocity_x', config["maximum_linear_velocity"][0]),
+                ('maximum_linear_velocity_y', config["maximum_linear_velocity"][1]),
+                ('maximum_linear_velocity_z', config["maximum_linear_velocity"][2]),
+                ('maximum_linear_acceleration_x', config["maximum_linear_acceleration"][0]),
+                ('maximum_linear_acceleration_y', config["maximum_linear_acceleration"][1]),
+                ('maximum_linear_acceleration_z', config["maximum_linear_acceleration"][2]),
+                ('maximum_angular_velocity_x', config["maximum_angular_velocity"][0]),
+                ('maximum_angular_velocity_y', config["maximum_angular_velocity"][1]),
+                ('maximum_angular_velocity_z', config["maximum_angular_velocity"][2]),
+                ('maximum_angular_acceleration_x', config["maximum_angular_acceleration"][0]),
+                ('maximum_angular_acceleration_y', config["maximum_angular_acceleration"][1]),
+                ('maximum_angular_acceleration_z', config["maximum_angular_acceleration"][2]),
                 ('volume', config["volume"]),
-                ('cob', config["cob"])
+                ('cob_x', config["cob"][0]),
+                ('cob_y', config["cob"][1]),
+                ('cob_z', config["cob"][2])
             ]) 
 
         self.lastTorque = None
@@ -110,38 +138,110 @@ class ControllerNode(Node):
     def parameters_callback(self, params):
         success = True
         for param in params:
-            if param.name == "maximum_linear_velocity":
-                self.linearController.maxVelocity = param.value
-            elif param.name == "maximum_linear_acceleration":
-                self.linearController.maxAccel = param.value
-            elif param.name == "maximum_angular_velocity":
-                self.angularController.maxVelocity = param.value
-            elif param.name == "maximum_angular_acceleration":
-                self.angularController.maxAccel = param.value
-            elif param.name == "linear_position_p":
-                self.linearController.positionP = param.value
-            elif param.name == "linear_velocity_p":
-                self.linearController.velocityP = param.value
-            elif param.name == "angular_position_p":
-                self.angularController.positionP = param.value
-            elif param.name == "angular_velocity_p":
-                self.angularController.velocityP = param.value
-            elif param.name == "linear_damping":
-                self.accelerationCalculator.linearDrag = param.value
-            elif param.name == "quadratic_damping":
-                self.accelerationCalculator.quadraticDrag = param.value
-            elif param.name == "maximum_linear_velocity":
-                self.linearController.maxVelocity = param.value
-            elif param.name == "maximum_linear_acceleration":
-                self.linearController.maxAccel = param.value
-            elif param.name == "maximum_angular_velocity":
-                self.angularController.maxVelocity = param.value
-            elif param.name == "maximum_angular_acceleration":
-                self.angularController.maxAccel = param.value
+            if param.name == "maximum_linear_velocity_x":
+                self.linearController.maxVelocity[0] = param.value
+            elif param.name == "maximum_linear_velocity_y":
+                self.linearController.maxVelocity[1] = param.value
+            elif param.name == "maximum_linear_velocity_z":
+                self.linearController.maxVelocity[2] = param.value
+            elif param.name == "maximum_linear_acceleration_x":
+                self.linearController.maxAccel[0] = param.value
+            elif param.name == "maximum_linear_acceleration_y":
+                self.linearController.maxAccel[1] = param.value
+            elif param.name == "maximum_linear_acceleration_z":
+                self.linearController.maxAccel[2] = param.value
+            elif param.name == "maximum_angular_velocity_x":
+                self.angularController.maxVelocity[0] = param.value
+            elif param.name == "maximum_angular_velocity_y":
+                self.angularController.maxVelocity[1] = param.value
+            elif param.name == "maximum_angular_velocity_z":
+                self.angularController.maxVelocity[2] = param.value
+            elif param.name == "maximum_angular_acceleration_x":
+                self.angularController.maxAccel[0] = param.value
+            elif param.name == "maximum_angular_acceleration_y":
+                self.angularController.maxAccel[1] = param.value
+            elif param.name == "maximum_angular_acceleration_z":
+                self.angularController.maxAccel[2] = param.value
+            elif param.name == "linear_position_p_x":
+                self.linearController.positionP[0] = param.value
+            elif param.name == "linear_position_p_y":
+                self.linearController.positionP[1] = param.value
+            elif param.name == "linear_position_p_z":
+                self.linearController.positionP[2] = param.value
+            elif param.name == "linear_velocity_p_x":
+                self.linearController.velocityP[0] = param.value
+            elif param.name == "linear_velocity_p_y":
+                self.linearController.velocityP[1] = param.value
+            elif param.name == "linear_velocity_p_z":
+                self.linearController.velocityP[2] = param.value
+            elif param.name == "angular_position_p_x":
+                self.angularController.positionP[0] = param.value
+            elif param.name == "angular_position_p_y":
+                self.angularController.positionP[1] = param.value
+            elif param.name == "angular_position_p_z":
+                self.angularController.positionP[2] = param.value
+            elif param.name == "angular_velocity_p_x":
+                self.angularController.velocityP[0] = param.value
+            elif param.name == "angular_velocity_p_y":
+                self.angularController.velocityP[1] = param.value
+            elif param.name == "angular_velocity_p_z":
+                self.angularController.velocityP[2] = param.value
+            elif param.name == "linear_damping_x":
+                self.accelerationCalculator.linearDrag[0] = param.value
+            elif param.name == "linear_damping_y":
+                self.accelerationCalculator.linearDrag[1] = param.value
+            elif param.name == "linear_damping_z":
+                self.accelerationCalculator.linearDrag[2] = param.value
+            elif param.name == "linear_damping_rot_x":
+                self.accelerationCalculator.linearDrag[3] = param.value
+            elif param.name == "linear_damping_rot_y":
+                self.accelerationCalculator.linearDrag[4] = param.value
+            elif param.name == "linear_damping_rot_z":
+                self.accelerationCalculator.linearDrag[5] = param.value
+            elif param.name == "quadratic_damping_x":
+                self.accelerationCalculator.quadraticDrag[0] = param.value
+            elif param.name == "quadratic_damping_y":
+                self.accelerationCalculator.quadraticDrag[1] = param.value
+            elif param.name == "quadratic_damping_z":
+                self.accelerationCalculator.quadraticDrag[2] = param.value
+            elif param.name == "quadratic_damping_rot_x":
+                self.accelerationCalculator.quadraticDrag[3] = param.value
+            elif param.name == "quadratic_damping_rot_y":
+                self.accelerationCalculator.quadraticDrag[4] = param.value
+            elif param.name == "quadratic_damping_rot_z":
+                self.accelerationCalculator.quadraticDrag[5] = param.value
+            elif param.name == "maximum_linear_velocity_x":
+                self.linearController.maxVelocity[0] = param.value
+            elif param.name == "maximum_linear_velocity_y":
+                self.linearController.maxVelocity[1] = param.value
+            elif param.name == "maximum_linear_velocity_z":
+                self.linearController.maxVelocity[2] = param.value
+            elif param.name == "maximum_linear_acceleration_x":
+                self.linearController.maxAccel[0] = param.value
+            elif param.name == "maximum_linear_acceleration_y":
+                self.linearController.maxAccel[1] = param.value
+            elif param.name == "maximum_linear_acceleration_z":
+                self.linearController.maxAccel[2] = param.value
+            elif param.name == "maximum_angular_velocity_x":
+                self.angularController.maxVelocity[0] = param.value
+            elif param.name == "maximum_angular_velocity_y":
+                self.angularController.maxVelocity[1] = param.value
+            elif param.name == "maximum_angular_velocity_z":
+                self.angularController.maxVelocity[2] = param.value
+            elif param.name == "maximum_angular_acceleration_x":
+                self.angularController.maxAccel[0] = param.value
+            elif param.name == "maximum_angular_acceleration_y":
+                self.angularController.maxAccel[1] = param.value
+            elif param.name == "maximum_angular_acceleration_z":
+                self.angularController.maxAccel[2] = param.value
             elif param.name == "volume":
                 self.accelerationCalculator.buoyancy = np.array([0, 0, param.value * self.accelerationCalculator.density * self.accelerationCalculator.gravity  ])
-            elif param.name == "cob":
-                self.accelerationCalculator.cob = param.value
+            elif param.name == "cob_x":
+                self.accelerationCalculator.cob[0] = param.value
+            elif param.name == "cob_y":
+                self.accelerationCalculator.cob[1] = param.value
+            elif param.name == "cob_z":
+                self.accelerationCalculator.cob[2] = param.value
             else:
                 success = False
                 

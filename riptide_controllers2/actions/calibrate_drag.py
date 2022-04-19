@@ -284,8 +284,18 @@ class CalibrateDragActionServer(Node):
         self.running = True
 
         self.update_controller_config({
-            "linear_damping": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            "quadratic_damping": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "linear_damping_x": 0.0,
+            "linear_damping_y": 0.0, 
+            "linear_damping_z": 0.0,
+            "linear_damping_rot_x": 0.0,
+            "linear_damping_rot_y": 0.0,
+            "linear_damping_rot_z": 0.0,
+            "quadratic_damping_x": 0.0,
+            "quadratic_damping_y": 0.0,
+            "quadratic_damping_z": 0.0,
+            "quadratic_damping_rot_x": 0.0,
+            "quadratic_damping_rot_y": 0.0,
+            "quadratic_damping_rot_z": 0.0
         })
 
         # Initialize starting position of robot
@@ -339,8 +349,18 @@ class CalibrateDragActionServer(Node):
         self.get_logger().info("Drag calibration completed. New calibration values applied")
 
         self.update_controller_config({
-            "linear_damping": list(linear_params),
-            "quadratic_damping": list(quadratic_params),
+            "linear_damping_x": linear_params[0],
+            "linear_damping_y": linear_params[1],
+            "linear_damping_z": linear_params[2],
+            "linear_damping_rot_x": linear_params[3],
+            "linear_damping_rot_y": linear_params[4],
+            "linear_damping_rot_z": linear_params[5],
+            "quadratic_damping_x": quadratic_params[0],
+            "quadratic_damping_y": quadratic_params[1],
+            "quadratic_damping_z": quadratic_params[2],
+            "quadratic_damping_rot_x": quadratic_params[3],
+            "quadratic_damping_rot_y": quadratic_params[4],
+            "quadratic_damping_rot_z": quadratic_params[5]
         })
 
         self._result.linear_drag = list(linear_params)

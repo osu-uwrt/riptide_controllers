@@ -237,9 +237,21 @@ class CalibrateBuoyancyAction(Node):
         # Reset parameters to default
         self.update_controller_config({
             "volume": volume, 
-            "cob": list(cob),
-            "linear_damping": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            "quadratic_damping": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "cob_x": cob[0],
+            "cob_y": cob[1],
+            "cob_z": cob[2],
+            "linear_damping_x": 0.0,
+            "linear_damping_y": 0.0,
+            "linear_damping_z": 0.0,
+            "linear_damping_rot_x": 0.0,
+            "linear_damping_rot_y": 0.0,
+            "linear_damping_rot_z": 0.0,
+            "quadratic_damping_x": 0.0,
+            "quadratic_damping_y": 0.0,
+            "quadratic_damping_z": 0.0,
+            "quadratic_damping_rot_x": 0.0,
+            "quadratic_damping_rot_y": 0.0,
+            "quadratic_damping_rot_z": 0.0
         })
 
         # Submerge
@@ -290,7 +302,7 @@ class CalibrateBuoyancyAction(Node):
         if self.tune(goal_handle,
             cob[:2], 
             get_cob_adjustment, 
-            lambda cob_local: self.update_controller_config({"cob": [cob_local[0], cob_local[1], cob[2]]}),
+            lambda cob_local: self.update_controller_config({"cob_x": cob_local[0], "cob_y": cob_local[1], "cob_z": cob[2]}),
             num_samples = 2,
             delay = 1
         ) is None:
@@ -318,7 +330,7 @@ class CalibrateBuoyancyAction(Node):
         if self.tune(goal_handle,
             cob[2], 
             get_cob_z_adjustment, 
-            lambda z: self.update_controller_config({"cob": [cob[0], cob[1], z]})
+            lambda z: self.update_controller_config({"cob_x": cob[0], "cob_y": cob[1], "cob_z": z})
         ) is None:
             return CalibrateBuoyancy.Result()
 
@@ -347,8 +359,18 @@ class CalibrateBuoyancyAction(Node):
 
     def cleanup(self):
         self.update_controller_config({
-            "linear_damping": self.initial_config['linear_damping'],
-            "quadratic_damping": self.initial_config['quadratic_damping'],
+            "linear_damping_x": self.initial_config['linear_damping_x'],
+            "linear_damping_y": self.initial_config['linear_damping_y'],
+            "linear_damping_z": self.initial_config['linear_damping_z'],
+            "linear_damping_rot_x": self.initial_config['linear_damping_rot_x'],
+            "linear_damping_rot_y": self.initial_config['linear_damping_rot_y'],
+            "linear_damping_rot_z": self.initial_config['linear_damping_rot_z'],
+            "quadratic_damping_x": self.initial_config['quadratic_damping_x'],
+            "quadratic_damping_y": self.initial_config['quadratic_damping_y'],
+            "quadratic_damping_z": self.initial_config['quadratic_damping_z'],
+            "quadratic_damping_rot_x": self.initial_config['quadratic_damping_rot_x'],
+            "quadratic_damping_rot_y": self.initial_config['quadratic_damping_rot_y'],
+            "quadratic_damping_rot_z": self.initial_config['quadratic_damping_rot_z']
         })
         self.off_pub.publish(Empty())
 
