@@ -1,8 +1,6 @@
 import numpy as np
-# import transforms3d as tf3d
 from abc import ABC, abstractmethod
 from nav_msgs.msg import Odometry
-# from transforms3d._gohlketransforms import quaternion_slerp
 from  tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_slerp
 
 def msgToNumpy(msg):
@@ -26,9 +24,7 @@ def worldToBody(orientation, vector):
     """
 
     vector = np.append(vector, 0)
-    # orientationInv = tf3d.quaternions.qinverse(orientation)
     orientationInv = quaternion_inverse(orientation)
-    # newVector = tf3d.quaternions.qmult(orientationInv, tf3d.quaternions.qmult(vector, orientation))
     newVector = quaternion_multiply(orientationInv, quaternion_multiply(vector, orientation))
     return newVector[:3]
 
@@ -53,11 +49,6 @@ def applyMax(vector, max_vector):
                 scale = element_scale
 
     return vector * scale
-
-# def slerp(one, two, t):
-#     """Spherical Linear intERPolation."""
-#     return tf3d.quaternions.qmult(tf3d.quaternions.qmult(two, tf3d.quaternions.qinverse(one))**t, one)
-
 
 class CascadedPController(ABC):
 
@@ -175,12 +166,19 @@ class CascadedPController(ABC):
 
         netAccel = applyMax(netAccel, self.maxAccel)
         
-        if self.targetAcceleration is not None:                         # Trajectory mode
+        # Trajectory mode
+        if self.targetAcceleration is not None:                         
             self.steady = False
-        elif self.targetPosition is not None:                           # Position mode
+
+        # Position mode
+        elif self.targetPosition is not None:
             self.steady = np.allclose(correctiveVelocity, np.zeros(3), atol=self.steadyVelThresh)
-        elif self.targetVelocity is not None:                           # Velocity mode
+
+        # Velocity mode
+        elif self.targetVelocity is not None:
             self.steady = np.allclose(netAccel, np.zeros(3), atol=self.steadyAccelThresh)
+
+        # disabled state
         else:
             self.steady = True
 

@@ -60,9 +60,50 @@ class ControllerNode(Node):
         self.linearController = LinearCascadedPController()
         self.angularController = AngularCascadedPController()
         self.accelerationCalculator = AccelerationCalculator(config)
-            
-        self.add_on_set_parameters_callback(self.parameters_callback)
-        
+
+        # configure the controllers
+        # linear controller first
+        self.linearController.velocityP = np.array(config["linear_velocity_p"])
+        self.linearController.positionP = np.array(config["linear_position_p"])
+        self.linearController.maxVelocity = np.array(config["maximum_linear_velocity"])
+        self.linearController.maxAccel = np.array(config["maximum_angular_acceleration"])
+
+        # angular controller second
+        self.angularController.velocityP = np.array(config["angular_velocity_p"])
+        self.angularController.positionP = np.array(config["angular_position_p"])
+        self.angularController.maxVelocity = np.array(config["maximum_angular_velocity"])
+        self.angularController.maxAccel = np.array(config["maximum_angular_acceleration"])
+
+        self.lastTorque = None
+        self.lastForce = None
+        self.off = True
+
+        # setup publishers 
+        self.forcePub = self.create_publisher(Twist, "net_force", qos_profile_system_default)
+        self.steadyPub = self.create_publisher(Bool, "steady", qos_profile_system_default)
+        self.accelPub = self.create_publisher(Twist, "requested_accel", qos_profile_system_default)
+
+        # setup all subscribers
+        self.subs = []
+
+        # position information subscribers
+        self.subs.append(self.create_subscription(Odometry, "odometry/filtered", self.updateState, qos_profile_system_default))
+
+        # control input subscribers
+        self.subs.append(self.create_subscription(Quaternion, "orientation", self.angularController.setTargetPosition, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Vector3, "angular_velocity", self.angularController.setTargetVelocity, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Vector3, "position", self.linearController.setTargetPosition, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Vector3, "linear_velocity", self.linearController.setTargetVelocity, qos_profile_system_default))
+
+        # state set subscribers
+        self.subs.append(self.create_subscription(Empty, "disable_angular", self.angularController.disable, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Empty, "disable_linear", self.linearController.disable, qos_profile_system_default))
+        self.subs.append(self.create_subscription(Empty, "off", self.turnOff, qos_profile_system_default))
+        self.subs.append(self.create_subscription(RobotState, "state/robot", self.switch_cb, qos_profile_sensor_data))
+
+        #create an action server
+        self._as = ActionServer(self, FollowTrajectory, "follow_trajectory", self.trajectory_callback)
+
         # declare the configuration data
         self.declare_parameters(
             namespace='',
@@ -109,35 +150,15 @@ class ControllerNode(Node):
                 ('cob_z', config["cob"][2])
             ]) 
 
-        self.lastTorque = None
-        self.lastForce = None
-        self.off = True
-
-        # setup pulbishers 
-        self.forcePub = self.create_publisher(Twist, "net_force", qos_profile_system_default)
-        self.steadyPub = self.create_publisher(Bool, "steady", qos_profile_system_default)
-        self.accelPub = self.create_publisher(Twist, "requested_accel", qos_profile_system_default)
-
-        # setup all subscribers
-        self.subs = []
-        self.subs.append(self.create_subscription(Odometry, "odometry/filtered", self.updateState, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Quaternion, "orientation", self.angularController.setTargetPosition, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Vector3, "angular_velocity", self.angularController.setTargetVelocity, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Empty, "disable_angular", self.angularController.disable, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Vector3, "position", self.linearController.setTargetPosition, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Vector3, "linear_velocity", self.linearController.setTargetVelocity, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Empty, "disable_linear", self.linearController.disable, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Empty, "off", self.turnOff, qos_profile_system_default))
-        self.subs.append(self.create_subscription(RobotState, "state/robot", self.switch_cb, qos_profile_sensor_data))
-
-        #create an action server
-        self._as = ActionServer(self, FollowTrajectory, "follow_trajectory", self.trajectory_callback)
+        # initialize reconfigure
+        self.add_on_set_parameters_callback(self.parameters_callback)
 
         self.get_logger().info("Riptide controller initalized")
 
     def parameters_callback(self, params):
         success = True
         for param in params:
+            self.get_logger().info(f"updating {param.name} to {param.value}")
             if param.name == "maximum_linear_velocity_x":
                 self.linearController.maxVelocity[0] = param.value
             elif param.name == "maximum_linear_velocity_y":
@@ -235,7 +256,7 @@ class ControllerNode(Node):
             elif param.name == "maximum_angular_acceleration_z":
                 self.angularController.maxAccel[2] = param.value
             elif param.name == "volume":
-                self.accelerationCalculator.buoyancy = np.array([0, 0, param.value * self.accelerationCalculator.density * self.accelerationCalculator.gravity  ])
+                self.accelerationCalculator.buoyancy = np.array([0, 0, param.value * self.accelerationCalculator.density * self.accelerationCalculator.gravity])
             elif param.name == "cob_x":
                 self.accelerationCalculator.cob[0] = param.value
             elif param.name == "cob_y":
