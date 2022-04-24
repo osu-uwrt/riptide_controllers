@@ -55,7 +55,7 @@ def changeFrame(orientation, vector, w2b = True):
 class CalibrateBuoyancyAction(Node):
 
     _result = CalibrateBuoyancy.Result()
-    INITIAL_PARAM_NAMES = ['volume', 'cob', 'linear_damping', 'quadratic_damping']
+    INITIAL_PARAM_NAMES = ['volume', 'cob_x', 'cob_y', 'cob_z', 'linear_damping_x', 'linear_damping_y', 'linear_damping_z', 'linear_damping_rot_x', 'linear_damping_rot_y', 'linear_damping_rot_z', 'quadratic_damping_x', 'quadratic_damping_y', 'quadratic_damping_z', 'quadratic_damping_rot_x', 'quadratic_damping_rot_y', 'quadratic_damping_rot_z']
 
     def __init__(self):
         super().__init__('calibrate_buoyancy')
@@ -258,7 +258,7 @@ class CalibrateBuoyancyAction(Node):
         odom_msg = self.wait_for_odometry_msg()
         current_position = msg_to_numpy(odom_msg.pose.pose.position)
         current_orientation = msg_to_numpy(odom_msg.pose.pose.orientation)
-        self.position_pub.publish(Vector3(x=current_position[0], y=current_position[1], z=-1.0))
+        self.position_pub.publish(Vector3(x=current_position[0], y=current_position[1], z=-1.5))
         _, _, yaw = euler_from_quaternion(current_orientation)
         x,y,z,w = quaternion_from_euler(0, 0, yaw)
         self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
