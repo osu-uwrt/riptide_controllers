@@ -251,13 +251,14 @@ class AccelerationCalculator:
         self.mass = np.array(config["mass"])
         self.com = np.array(config["com"])
         self.inertia = np.array(config["inertia"])
-        self.linearDrag = np.zeros(6)
-        self.quadraticDrag = np.zeros(6)
+        self.linearDrag = np.array(config["linear_damping"])
+        self.quadraticDrag = np.array(config["quadratic_damping"])
         self.volume = np.array(config["volume"])
-        self.cob = np.zeros(3)
+        self.cob = np.array(config["cob"])
         self.gravity = 9.8 # (m/sec^2)
         self.density = 1000 # density of water (kg/m^3)
-        self.buoyancy = np.zeros(3)
+        self.buoyancy = np.array([0, 0, self.volume * self.density * self.gravity])
+        self.maxForce = 4 * config['thruster']["max_force"]
 
     def accelToNetForce(self, odom, linearAccel, angularAccel):
         """ 
@@ -295,5 +296,9 @@ class AccelerationCalculator:
         # Net Calculation
         netForce = netForce - bodyFrameBuoyancy - dragForce - gravityForce
         netTorque = netTorque - buoyancyTorque - precessionTorque - dragTorque
+        
+        # make sure the force doesnt exceed maximums of the vehicle
+        if(np.linalg.norm(netForce) > self.maxForce):
+            netForce = netForce / np.linalg.norm(netForce) * self.maxForce
 
         return netForce, netTorque
