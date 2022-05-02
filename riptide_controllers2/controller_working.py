@@ -98,11 +98,7 @@ class ControllerNode(Node):
         # state set subscribers
         self.subs.append(self.create_subscription(Empty, "disable_angular", self.angularController.disable, qos_profile_system_default))
         self.subs.append(self.create_subscription(Empty, "disable_linear", self.linearController.disable, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Empty, "off", self.turnOff, qos_profile_system_default))
         self.subs.append(self.create_subscription(RobotState, "state/robot", self.switch_cb, qos_profile_sensor_data))
-
-        #create an action server
-        self._as = ActionServer(self, FollowTrajectory, "follow_trajectory", self.trajectory_callback)
 
         # declare the configuration data
         self.declare_parameters(
@@ -153,7 +149,7 @@ class ControllerNode(Node):
         # initialize reconfigure
         self.add_on_set_parameters_callback(self.parameters_callback)
 
-        self.get_logger().info("Riptide controller initalized")
+        self.get_logger().info(f"Riptide controller initalized with params {config}")
 
     def parameters_callback(self, params):
         success = True
@@ -273,21 +269,13 @@ class ControllerNode(Node):
         linearAccel = self.linearController.update(odomMsg)
         angularAccel = self.angularController.update(odomMsg)
 
-        #print(linearAccel, angularAccel)
-
         accelTwist = Twist()
         accelTwist.linear = vect3_from_np(linearAccel)
         accelTwist.angular = vect3_from_np(angularAccel)
         self.accelPub.publish(accelTwist)
-
-        if np.linalg.norm(linearAccel) > 0 or np.linalg.norm(angularAccel) > 0:
-            self.off = False
-
-        if not self.off:
-            netForce, netTorque = self.accelerationCalculator.accelToNetForce(odomMsg, linearAccel, angularAccel)
-        else:
-            netForce, netTorque = np.zeros(3), np.zeros(3)
-
+        
+        netForce, netTorque = self.accelerationCalculator.accelToNetForce(odomMsg, linearAccel, angularAccel)
+        
         isSteady = Bool()
         isSteady.data = self.linearController.steady and self.angularController.steady
         self.steadyPub.publish(isSteady)
@@ -304,27 +292,6 @@ class ControllerNode(Node):
             self.lastTorque = netTorque
 
         self.get_logger().debug("ticked controllers")
-
-    def trajectory_callback(self, goal_handle):
-        start = self.get_clock().now()
-
-        for point in goal_handle.goal.trajectory.points:
-            # Wait for next point
-            while (self.get_clock().now() - start) < point.time_from_start:
-                time.sleep(0.01)
-
-            self.linear_controller.targetPosition = msgToNumpy(point.transforms[0].translation)
-            self.linear_controller.targetVelocity = msgToNumpy(point.velocities[0].linear)
-            self.linear_controller.targetAcceleration = msgToNumpy(point.accelerations[0].linear)
-            self.angular_controller.targetPosition = msgToNumpy(point.transforms[0].rotation)
-            self.angular_controller.targetVelocity = msgToNumpy(point.velocities[0].angular)
-            self.angular_controller.targetAcceleration = msgToNumpy(point.accelerations[0].angular)
-
-        last_point = goal_handle.goal.trajectory.points[-1]
-        self.linear_controller.setTargetPosition(last_point.transforms[0].translation)
-        self.angular_controller.setTargetPosition(last_point.transforms[0].rotation)
-
-        goal_handle.succeed()
 
     def turnOff(self, msg=None):
         self.angularController.disable()
