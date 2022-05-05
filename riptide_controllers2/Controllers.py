@@ -29,7 +29,7 @@ def worldToBody(orientation, vector):
     vector = np.append(vector, 0)
     orientationInv = quaternion_inverse(orientation)
     newVector = quaternion_multiply(orientationInv, quaternion_multiply(vector, orientation))
-    return newVector[:3]
+    return np.array(newVector[:3])
 
 def applyMax(vector, max_vector):
     """ 
@@ -115,7 +115,7 @@ class CascadedPController(ABC):
 
         """
 
-        self.setPoint = target
+        self.setPoint = msgToNumpy(target)
         self.controlMode = mode
 
     def update(self, odom: Odometry) -> JointState:
@@ -194,7 +194,10 @@ class AngularCascadedPController(CascadedPController):
             # NEW Way
             # based on quadrotor attitude control with a PID controller https://folk.ntnu.no/skoge/prost/proceedings/ecc-2013/data/papers/0927.pdf    
             errorQuat = quaternion_multiply(self.setPoint, quaternion_conjugate(currentOrientation))
-            return errorQuat[1:3]
+            if errorQuat[3] < 0:
+                errorQuat = quaternion_conjugate(errorQuat)
+                
+            return np.array(errorQuat[:3]) * self.positionP
 
             # OLD WAY, only works to find a direction, causes high gains in position
             # # Find an orientation in the right direction but with a small angle
