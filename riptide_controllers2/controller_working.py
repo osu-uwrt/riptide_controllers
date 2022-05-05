@@ -294,7 +294,7 @@ class ControllerNode(Node):
         if(msg.mode == ControllerCommand.POSITION):
             self.angularController.setTargetPosition(msg.setpoint_quat, ControlMode(msg.mode))
         else:
-            self.angularController.setTargetPosition(msg.setpoint_quat, ControlMode(msg.mode))
+            self.angularController.setTargetPosition(msg.setpoint_vect, ControlMode(msg.mode))
 
     def switch_cb(self, msg : FirmwareState):
         if msg.kill_switches_asserting_kill > 0:
