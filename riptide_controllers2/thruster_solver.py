@@ -44,9 +44,9 @@ class ThrusterSolverNode(Node):
     def __init__(self):
         super().__init__('riptide_controllers2')
 
-        self.create_subscription(Twist, "net_force", self.force_cb, qos_profile_system_default)
+        self.create_subscription(Twist, "controller/body_force", self.force_cb, qos_profile_system_default)
 
-        self.thruster_pub = self.create_publisher( Float32MultiArray, "thruster_forces", qos_profile_system_default)
+        self.thruster_pub = self.create_publisher(Float32MultiArray, "thruster_forces", qos_profile_system_default)
         self.pwm_pub = self.create_publisher(PwmStamped ,"command/pwm", qos_profile_system_default)
         self.enabledSub = self.create_subscription(FirmwareState, "state/firmware", self.firmware_cb, qos_profile_sensor_data)
 
