@@ -29,7 +29,7 @@ import numpy as np
 import yaml
 
 from riptide_controllers2.Controllers import ControlMode, LinearCascadedPController, AngularCascadedPController, AccelerationCalculator
-from riptide_msgs2.msg import FirmwareState, ControllerCommand
+from riptide_msgs2.msg import RobotState, ControllerCommand
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, Vector3, Twist
 from sensor_msgs.msg import JointState
@@ -92,7 +92,7 @@ class ControllerNode(Node):
         self.subs.append(self.create_subscription(ControllerCommand, "controller/orientation", self.setAngular, qos_profile_system_default))
         
         # state information
-        self.subs.append(self.create_subscription(FirmwareState, "state/firmware", self.switch_cb, qos_profile_sensor_data))
+        self.subs.append(self.create_subscription(RobotState, "state/firmware", self.switch_cb, qos_profile_sensor_data))
 
         # declare the configuration data
         self.declare_parameters(
@@ -296,8 +296,8 @@ class ControllerNode(Node):
         else:
             self.angularController.setTargetPosition(msg.setpoint_vect, ControlMode(msg.mode))
 
-    def switch_cb(self, msg : FirmwareState):
-        if msg.kill_switches_asserting_kill > 0:
+    def switch_cb(self, msg : RobotState):
+        if not msg.kill_switch_inserted:
             self.get_logger().warning('Controller output disabled from kill switch assert')
             self.angularController.setTargetPosition(Vector3(), ControlMode.DISABLED)
             self.linearController.setTargetPosition(Vector3(), ControlMode.DISABLED)
