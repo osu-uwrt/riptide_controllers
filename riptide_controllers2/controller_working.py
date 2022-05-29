@@ -88,8 +88,8 @@ class ControllerNode(Node):
         self.subs.append(self.create_subscription(Odometry, "odometry/filtered", self.updateState, qos_profile_system_default))
 
         # control input subscribers
-        self.subs.append(self.create_subscription(ControllerCommand, "controller/position", self.setLinear, qos_profile_system_default))
-        self.subs.append(self.create_subscription(ControllerCommand, "controller/orientation", self.setAngular, qos_profile_system_default))
+        self.subs.append(self.create_subscription(ControllerCommand, "controller/linear", self.setLinear, qos_profile_system_default))
+        self.subs.append(self.create_subscription(ControllerCommand, "controller/angular", self.setAngular, qos_profile_system_default))
         
         # state information
         self.subs.append(self.create_subscription(RobotState, "state/firmware", self.switch_cb, qos_profile_sensor_data))
