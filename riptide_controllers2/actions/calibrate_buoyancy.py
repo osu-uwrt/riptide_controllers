@@ -8,12 +8,12 @@ import rclpy
 import time
 import yaml
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
-from rclpy.action.server import ServerGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_system_default
 from queue import Queue
+from riptide_msgs2.msg import ControllerCommand
 
 from geometry_msgs.msg import Vector3, Quaternion, Twist
 from nav_msgs.msg import Odometry
@@ -55,15 +55,22 @@ def changeFrame(orientation, vector, w2b = True):
 class CalibrateBuoyancyAction(Node):
 
     _result = CalibrateBuoyancy.Result()
-    INITIAL_PARAM_NAMES = ['volume', 'cob_x', 'cob_y', 'cob_z', 'linear_damping_x', 'linear_damping_y', 'linear_damping_z', 'linear_damping_rot_x', 'linear_damping_rot_y', 'linear_damping_rot_z', 'quadratic_damping_x', 'quadratic_damping_y', 'quadratic_damping_z', 'quadratic_damping_rot_x', 'quadratic_damping_rot_y', 'quadratic_damping_rot_z']
+    INITIAL_PARAM_NAMES = [
+        'volume', 'cob_x', 'cob_y', 'cob_z',
+        'linear_damping_x', 'linear_damping_y',
+        'linear_damping_z', 'linear_damping_rot_x',
+        'linear_damping_rot_y', 'linear_damping_rot_z',
+        'quadratic_damping_x', 'quadratic_damping_y',
+        'quadratic_damping_z', 'quadratic_damping_rot_x',
+        'quadratic_damping_rot_y', 'quadratic_damping_rot_z'
+    ]
 
     def __init__(self):
         super().__init__('calibrate_buoyancy')
         self.declare_parameter("vehicle_config", rclpy.Parameter.Type.STRING)
 
-        self.orientation_pub = self.create_publisher(Quaternion ,"orientation", qos_profile_system_default)
-        self.position_pub = self.create_publisher(Vector3 ,"position", qos_profile_system_default)
-        self.off_pub = self.create_publisher(Empty ,"off", qos_profile_system_default)
+        self.linear_pub = self.create_publisher(ControllerCommand, "controller/linear", qos_profile_system_default)
+        self.angular_pub = self.create_publisher(ControllerCommand, "controller/angular", qos_profile_system_default)
         
         self.odometry_sub = self.create_subscription(Odometry, "odometry/filtered", self.odometry_cb, qos_profile_system_default)
         self.odometry_queue = Queue(1)
@@ -258,10 +265,19 @@ class CalibrateBuoyancyAction(Node):
         odom_msg = self.wait_for_odometry_msg()
         current_position = msg_to_numpy(odom_msg.pose.pose.position)
         current_orientation = msg_to_numpy(odom_msg.pose.pose.orientation)
-        self.position_pub.publish(Vector3(x=current_position[0], y=current_position[1], z=-1.5))
+
+        linear_command = ControllerCommand()
+        linear_command.mode = ControllerCommand.POSITION
+        linear_command.setpoint_vect = Vector3(x=current_position[0], y=current_position[1], z=-1.5)
+        self.linear_pub.publish(linear_command)
+
         _, _, yaw = euler_from_quaternion(current_orientation)
         x,y,z,w = quaternion_from_euler(0, 0, yaw)
-        self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
+
+        angularCommand = ControllerCommand()
+        angularCommand.mode = ControllerCommand.POSITION
+        angularCommand.setpoint_quat = Quaternion(w=w, x=x, y=y, z=z)
+        self.angular_pub.publish(angularCommand)
 
         # Wait for equilibrium
         time.sleep(10)
@@ -312,7 +328,11 @@ class CalibrateBuoyancyAction(Node):
 
         # Adjust orientation
         x,y,z,w = quaternion_from_euler(0, -math.pi / 4, yaw)
-        self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
+        angularCommand = ControllerCommand()
+        angularCommand.mode = ControllerCommand.POSITION
+        angularCommand.setpoint_quat = Quaternion(w=w, x=x, y=y, z=z)
+        self.angular_pub.publish(angularCommand)
+
         time.sleep(3)
 
         # Z COB function
@@ -372,7 +392,12 @@ class CalibrateBuoyancyAction(Node):
             "quadratic_damping_rot_y": self.initial_config['quadratic_damping_rot_y'],
             "quadratic_damping_rot_z": self.initial_config['quadratic_damping_rot_z']
         })
-        self.off_pub.publish(Empty())
+
+        # turn the controller off
+        off_msg = ControllerCommand()
+        off_msg.mode = ControllerCommand.DISABLED
+        self.linear_pub.publish(off_msg)
+        self.angular_pub.publish(off_msg)
 
 
 def main(args=None):
