@@ -40,10 +40,10 @@ class CalibrateDragActionServer(Node):
         self.linear_pub = self.create_publisher(ControllerCommand, "controller/linear", qos_profile_system_default)
         self.angular_pub = self.create_publisher(ControllerCommand, "controller/angular", qos_profile_system_default)
         
-        self.odometry_sub = self.create_subscription(Odometry, "odometry/filtered", self.odometry_cb, qos_profile_system_default)
+        self.odometry_sub = self.create_subscription(Odometry, "odometry/filtered", self.odometry_cb, qos_profile_system_default, callback_group=ReentrantCallbackGroup())
         self.odometry_queue = Queue(1)
 
-        self.requested_accel_sub = self.create_subscription(JointState, "controller/state", self.requested_accel_cb, qos_profile_system_default)
+        self.requested_accel_sub = self.create_subscription(JointState, "controller/state", self.requested_accel_cb, qos_profile_system_default, callback_group=ReentrantCallbackGroup())
         self.requested_accel_queue = Queue(1)
 
         # Get the mass and COM
