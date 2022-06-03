@@ -55,9 +55,7 @@ class CalibrateDragActionServer(Node):
 
         self.running = False
 
-        self.param_get_client = self.create_client(GetParameters, "controller/get_parameters")
         self.param_set_client = self.create_client(SetParameters, "controller/set_parameters")
-        self.param_get_client.wait_for_service()
         self.param_set_client.wait_for_service()
 
         self._action_server = ActionServer(
@@ -151,7 +149,10 @@ class CalibrateDragActionServer(Node):
         request = SetParameters.Request()
         request.parameters = parameters
         
-        response: SetParameters.Response = self.param_set_client.call(request)
+        future = self.param_set_client.call_async(request)
+        rclpy.spin_until_future_complete(self, future)
+        response: SetParameters.Response = future.result
+
         
         if len(response.results) != len(parameters):
             self.get_logger().error("Unable to set all requested parameters")
