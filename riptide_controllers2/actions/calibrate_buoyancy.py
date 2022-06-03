@@ -277,17 +277,13 @@ class CalibrateBuoyancyAction(Node):
         current_position = msg_to_numpy(odom_msg.pose.pose.position)
         current_orientation = msg_to_numpy(odom_msg.pose.pose.orientation)
 
-        linear_command = ControllerCommand()
-        linear_command.mode = ControllerCommand.POSITION
-        linear_command.setpoint_vect = Vector3(x=current_position[0], y=current_position[1], z=-1.5)
+        linear_command = ControllerCommand(mode=ControllerCommand.POSITION, setpoint_vect=Vector3(x=current_position[0], y=current_position[1], z=-1.5))
         self.linear_pub.publish(linear_command)
 
         _, _, yaw = euler_from_quaternion(current_orientation)
         x,y,z,w = quaternion_from_euler(0, 0, yaw)
 
-        angularCommand = ControllerCommand()
-        angularCommand.mode = ControllerCommand.POSITION
-        angularCommand.setpoint_quat = Quaternion(w=w, x=x, y=y, z=z)
+        angularCommand = ControllerCommand(mode=ControllerCommand.POSITION, setpoint_quat=Quaternion(w=w, x=x, y=y, z=z))
         self.angular_pub.publish(angularCommand)
 
         # Wait for equilibrium
@@ -339,9 +335,7 @@ class CalibrateBuoyancyAction(Node):
 
         # Adjust orientation
         x,y,z,w = quaternion_from_euler(0, -math.pi / 4, yaw)
-        angularCommand = ControllerCommand()
-        angularCommand.mode = ControllerCommand.POSITION
-        angularCommand.setpoint_quat = Quaternion(w=w, x=x, y=y, z=z)
+        angularCommand = ControllerCommand(mode=ControllerCommand.POSITION, setpoint_quat=Quaternion(w=w, x=x, y=y, z=z))
         self.angular_pub.publish(angularCommand)
 
         time.sleep(3)
