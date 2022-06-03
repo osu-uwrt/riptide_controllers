@@ -16,6 +16,7 @@ from queue import Queue
 from riptide_msgs2.msg import ControllerCommand
 
 from geometry_msgs.msg import Vector3, Quaternion, Twist
+from sensor_msgs.msg import JointState
 from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import Parameter
 from rcl_interfaces.msg import ParameterType
@@ -23,7 +24,6 @@ from rcl_interfaces.msg import ParameterValue
 from rcl_interfaces.srv import GetParameters
 from rcl_interfaces.srv import SetParameters
 from riptide_msgs2.action import CalibrateBuoyancy
-from std_msgs.msg import Empty
 
 from tf_transformations import quaternion_from_euler, euler_from_quaternion, quaternion_inverse, quaternion_multiply
 
@@ -74,7 +74,7 @@ class CalibrateBuoyancyAction(Node):
         
         self.odometry_sub = self.create_subscription(Odometry, "odometry/filtered", self.odometry_cb, qos_profile_system_default)
         self.odometry_queue = Queue(1)
-        self.requested_accel_sub = self.create_subscription(Twist, "requested_accel", self.requested_accel_cb, qos_profile_system_default)
+        self.requested_accel_sub = self.create_subscription(JointState, "controller/state", self.requested_accel_cb, qos_profile_system_default)
         self.requested_accel_queue = Queue(1)
 
         # Get the mass and COM
@@ -132,9 +132,20 @@ class CalibrateBuoyancyAction(Node):
         
         return self.odometry_queue.get(True)
 
-    def requested_accel_cb(self, msg: Twist) -> None:
+    def requested_accel_cb(self, msg: JointState) -> None:
         if not self.requested_accel_queue.full():
-            self.requested_accel_queue.put_nowait(msg)
+            internal_twist = Twist
+            def getVect(name: str):
+                vect = Vector3()
+                vect.x = msg.effort[msg.name.index(f'{name}_x')]
+                vect.y = msg.effort[msg.name.index(f'{name}_y')]
+                vect.z = msg.effort[msg.name.index(f'{name}_z')]
+                return vect
+
+            internal_twist.linear = getVect('lin')
+            internal_twist.angular = getVect('ang')
+
+            self.requested_accel_queue.put_nowait(internal_twist)
 
     def wait_for_requested_accel_msg(self) -> Twist:
         # Since the queue size is 1, if it has stuff in it just read to clear
