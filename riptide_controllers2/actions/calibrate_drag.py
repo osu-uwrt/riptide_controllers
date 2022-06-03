@@ -12,12 +12,14 @@ from queue import Queue
 
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, Vector3, Twist
+from sensor_msgs.msg import JointState
 from rcl_interfaces.msg import Parameter
 from rcl_interfaces.msg import ParameterType
 from rcl_interfaces.msg import ParameterValue
 from rcl_interfaces.srv import GetParameters
 from rcl_interfaces.srv import SetParameters
 from riptide_msgs2.action import CalibrateDrag
+from riptide_msgs2.msg import ControllerCommand
 
 from transforms3d import euler
 from math import pi
@@ -35,14 +37,13 @@ class CalibrateDragActionServer(Node):
         super().__init__('calibrate_drag')
         self.declare_parameter("vehicle_config", rclpy.Parameter.Type.STRING)
 
-        self.orientation_pub = self.create_publisher(Quaternion ,"orientation", qos_profile_system_default)
-        self.position_pub = self.create_publisher(Vector3 ,"position", qos_profile_system_default)
-        self.lin_vel_pub = self.create_publisher(Vector3 ,"linear_velocity", qos_profile_system_default)
-        self.ang_vel_pub = self.create_publisher(Vector3 ,"angular_velocity", qos_profile_system_default)
+        self.linear_pub = self.create_publisher(ControllerCommand, "controller/linear", qos_profile_system_default)
+        self.angular_pub = self.create_publisher(ControllerCommand, "controller/angular", qos_profile_system_default)
         
         self.odometry_sub = self.create_subscription(Odometry, "odometry/filtered", self.odometry_cb, qos_profile_system_default)
         self.odometry_queue = Queue(1)
-        self.requested_accel_sub = self.create_subscription(Twist, "requested_accel", self.requested_accel_cb, qos_profile_system_default)
+
+        self.requested_accel_sub = self.create_subscription(JointState, "controller/state", self.requested_accel_cb, qos_profile_system_default)
         self.requested_accel_queue = Queue(1)
 
         # Get the mass and COM
@@ -102,14 +103,22 @@ class CalibrateDragActionServer(Node):
         
         return self.odometry_queue.get(True)
 
-    def requested_accel_cb(self, msg):
-        # if not self.requested_accel_queue.full():
-        #     self.requested_accel_queue.put_nowait(msg)
-        
+    def requested_accel_cb(self, msg: JointState) -> None:
         if self.requested_accel_queue.full():
             self.requested_accel_queue.get_nowait()
-            
-        self.requested_accel_queue.put_nowait(msg)
+
+        internal_twist = Twist
+        def getVect(name: str):
+            vect = Vector3()
+            vect.x = msg.effort[msg.name.index(f'{name}_x')]
+            vect.y = msg.effort[msg.name.index(f'{name}_y')]
+            vect.z = msg.effort[msg.name.index(f'{name}_z')]
+            return vect
+
+        internal_twist.linear = getVect('lin')
+        internal_twist.angular = getVect('ang')
+
+        self.requested_accel_queue.put_nowait(internal_twist)
 
     def wait_for_requested_accel_msg(self):
         # Since the queue size is 1, if it has stuff in it just read to clear
@@ -186,18 +195,21 @@ class CalibrateDragActionServer(Node):
         p *= pi / 180
         y *= pi / 180
         w,x,y,z = euler.euler2quat(r, p, y, axes='sxyz')
-        self.orientation_pub.publish(Quaternion(w=w, x=x, y=y, z=z))
+
+        angularCommand = ControllerCommand(mode=ControllerCommand.POSITION, setpoint_quat=Quaternion(w=w, x=x, y=y, z=z))
+        self.angular_pub.publish(angularCommand)
+        
         time.sleep(5)
         
         
     def to_position(self, x, y, z):
-        targetPos = Vector3(x=x, y=y, z=z)
-        self.position_pub.publish(targetPos)
+        linear_command = ControllerCommand(mode=ControllerCommand.POSITION, setpoint_vect=Vector3(x=x, y=y, z=z))
+        self.linear_pub.publish(linear_command)
         
         startTime = self.get_clock().now()
         
         #block until either position is acheived or 30 seconds elapses
-        while(self.distance(targetPos, self.wait_for_odometry_msg().pose.pose.position) > 0.2 and (self.get_clock().now() - startTime).nanoseconds < 3e10):            
+        while(self.distance(linear_command.setpoint_vect , self.wait_for_odometry_msg().pose.pose.position) > 0.2 and (self.get_clock().now() - startTime).nanoseconds < 3e10):            
             time.sleep(1)
             
     def correct_depth(self, z):
@@ -212,12 +224,12 @@ class CalibrateDragActionServer(Node):
     # Apply force on corresponding axes and record velocities
     def collect_data(self, axis, velocity):
         publish_velocity = [
-            lambda x: self.lin_vel_pub.publish(Vector3(x=x,   y=0.0, z=0.0)),
-            lambda y: self.lin_vel_pub.publish(Vector3(x=0.0, y=y,   z=0.0)),
-            lambda z: self.lin_vel_pub.publish(Vector3(x=0.0, y=0.0, z=z  )),
-            lambda x: self.ang_vel_pub.publish(Vector3(x=x,   y=0.0, z=0.0)),
-            lambda y: self.ang_vel_pub.publish(Vector3(x=0.0, y=y,   z=0.0)),
-            lambda z: self.ang_vel_pub.publish(Vector3(x=0.0, y=0.0, z=z  ))
+            lambda x: self.linear_pub.publish(ControllerCommand(mode=ControllerCommand.VELOCITY, setpoint_vect=Vector3(x=x,   y=0.0, z=0.0))),
+            lambda y: self.linear_pub.publish(ControllerCommand(mode=ControllerCommand.VELOCITY, setpoint_vect=Vector3(x=0.0, y=y,   z=0.0))),
+            lambda z: self.linear_pub.publish(ControllerCommand(mode=ControllerCommand.VELOCITY, setpoint_vect=Vector3(x=0.0, y=0.0, z=z  ))),
+            lambda x: self.angular_pub.publish(ControllerCommand(mode=ControllerCommand.VELOCITY, setpoint_vect=Vector3(x=x,   y=0.0, z=0.0))),
+            lambda y: self.angular_pub.publish(ControllerCommand(mode=ControllerCommand.VELOCITY, setpoint_vect=Vector3(x=0.0, y=y,   z=0.0))),
+            lambda z: self.angular_pub.publish(ControllerCommand(mode=ControllerCommand.VELOCITY, setpoint_vect=Vector3(x=0.0, y=0.0, z=z  )))
         ]
 
         get_twist = [
