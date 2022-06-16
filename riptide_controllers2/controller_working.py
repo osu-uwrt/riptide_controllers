@@ -24,20 +24,17 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_system_default, qos_profile_sensor_data # can replace this with others
-from rclpy.action import ActionServer
 
 import numpy as np
-import time
 import yaml
 
-from riptide_controllers2.Controllers import msgToNumpy, LinearCascadedPController, AngularCascadedPController, AccelerationCalculator
-from riptide_msgs2.action import FollowTrajectory
-from riptide_msgs2.msg import RobotState
+from riptide_controllers2.Controllers import ControlMode, LinearCascadedPController, AngularCascadedPController, AccelerationCalculator
+from riptide_msgs2.msg import RobotState, ControllerCommand
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Quaternion, Vector3, Twist
-from std_msgs.msg import Empty, Bool
+from geometry_msgs.msg import Vector3, Twist
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool
 
-from rclpy.parameter import Parameter
 from rcl_interfaces.msg import SetParametersResult
 
 # assumes order is xyz
@@ -60,160 +57,251 @@ class ControllerNode(Node):
         self.linearController = LinearCascadedPController()
         self.angularController = AngularCascadedPController()
         self.accelerationCalculator = AccelerationCalculator(config)
-            
-        self.add_on_set_parameters_callback(self.parameters_callback)
+
+        # configure the controllers
+        # linear controller first
+        linear = config['controller']['linear']
+        self.linearController.velocityP = np.array(linear['p_gains']['velocity'])
+        self.linearController.positionP = np.array(linear['p_gains']['position'])
+        self.linearController.maxVelocity = np.array(linear['max']['velocity'])
+        self.linearController.maxAccel = np.array(linear['max']['acceleration'])
+
+        # angular controller second
+        angular = config['controller']['angular']
+        self.angularController.velocityP = np.array(angular['p_gains']['velocity'])
+        self.angularController.positionP = np.array(angular['p_gains']['position'])
+        self.angularController.maxVelocity = np.array(angular['max']['velocity'])
+        self.angularController.maxAccel = np.array(angular['max']['acceleration'])
+
+        self.lastTorque = None
+        self.lastForce = None
+
+        # setup publishers 
+        self.steadyPub = self.create_publisher(Bool, "controller/steady", qos_profile_system_default)
+        self.statePub = self.create_publisher(JointState, "controller/state", qos_profile_system_default)
+        self.forcePub = self.create_publisher(Twist, "controller/body_force", qos_profile_system_default)
+
+        # setup all subscribers
+        self.subs = []
+
+        # position information subscribers
+        self.subs.append(self.create_subscription(Odometry, "odometry/filtered", self.updateState, qos_profile_system_default))
+
+        # control input subscribers
+        self.subs.append(self.create_subscription(ControllerCommand, "controller/linear", self.setLinear, qos_profile_system_default))
+        self.subs.append(self.create_subscription(ControllerCommand, "controller/angular", self.setAngular, qos_profile_system_default))
         
+        # state information
+        self.subs.append(self.create_subscription(RobotState, "state/firmware", self.switch_cb, qos_profile_sensor_data))
+
         # declare the configuration data
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('linear_position_p', config["linear_position_p"]),
-                ('linear_velocity_p', config["linear_velocity_p"]),
-                ('angular_position_p', config["angular_position_p"]),
-                ('angular_velocity_p', config["angular_velocity_p"]),
-                ('linear_damping', config["linear_damping"]),
-                ('quadratic_damping', config["quadratic_damping"]),
-                ('maximum_linear_velocity', config["maximum_linear_velocity"]),
-                ('maximum_linear_acceleration', config["maximum_linear_acceleration"]),
-                ('maximum_angular_velocity', config["maximum_angular_velocity"]),
-                ('maximum_angular_acceleration', config["maximum_angular_acceleration"]),
+                ('linear_position_p_x', linear['p_gains']['position'][0]),
+                ('linear_position_p_y', linear['p_gains']['position'][1]),
+                ('linear_position_p_z', linear['p_gains']['position'][2]),
+                ('linear_velocity_p_x', linear['p_gains']['velocity'][0]),
+                ('linear_velocity_p_y', linear['p_gains']['velocity'][1]),
+                ('linear_velocity_p_z', linear['p_gains']['velocity'][2]),
+                ('angular_position_p_x', angular['p_gains']['position'][0]),
+                ('angular_position_p_y', angular['p_gains']['position'][1]),
+                ('angular_position_p_z', angular['p_gains']['position'][2]),
+                ('angular_velocity_p_x', angular['p_gains']['velocity'][0]),
+                ('angular_velocity_p_y', angular['p_gains']['velocity'][1]),
+                ('angular_velocity_p_z', angular['p_gains']['velocity'][2]),
+                ('linear_damping_x', linear['damping']['linear'][0]),
+                ('linear_damping_y', linear['damping']['linear'][1]),
+                ('linear_damping_z', linear['damping']['linear'][2]),
+                ('linear_damping_rot_x', angular['damping']['linear'][0]),
+                ('linear_damping_rot_y', angular['damping']['linear'][1]),
+                ('linear_damping_rot_z', angular['damping']['linear'][2]),
+                ('quadratic_damping_x', linear['damping']['quadratic'][0]),
+                ('quadratic_damping_y', linear['damping']['quadratic'][1]),
+                ('quadratic_damping_z', linear['damping']['quadratic'][2]),
+                ('quadratic_damping_rot_x', angular['damping']['quadratic'][0]),
+                ('quadratic_damping_rot_y', angular['damping']['quadratic'][1]),
+                ('quadratic_damping_rot_z', angular['damping']['quadratic'][2]),
+                ('maximum_linear_velocity_x', linear['max']['velocity'][0]),
+                ('maximum_linear_velocity_y', linear['max']['velocity'][1]),
+                ('maximum_linear_velocity_z', linear['max']['velocity'][2]),
+                ('maximum_linear_acceleration_x', linear['max']['acceleration'][0]),
+                ('maximum_linear_acceleration_y', linear['max']['acceleration'][1]),
+                ('maximum_linear_acceleration_z', linear['max']['acceleration'][2]),
+                ('maximum_angular_velocity_x', angular['max']['velocity'][0]),
+                ('maximum_angular_velocity_y', angular['max']['velocity'][1]),
+                ('maximum_angular_velocity_z', angular['max']['velocity'][2]),
+                ('maximum_angular_acceleration_x', angular['max']['acceleration'][0]),
+                ('maximum_angular_acceleration_y', angular['max']['acceleration'][1]),
+                ('maximum_angular_acceleration_z', angular['max']['acceleration'][2]),
                 ('volume', config["volume"]),
-                ('cob', config["cob"])
+                ('cob_x', config["cob"][0]),
+                ('cob_y', config["cob"][1]),
+                ('cob_z', config["cob"][2])
             ]) 
 
-        self.lastTorque = None
-        self.lastForce = None
-        self.off = True
+        # initialize reconfigure
+        self.add_on_set_parameters_callback(self.parameters_callback)
 
-        # setup pulbishers 
-        self.forcePub = self.create_publisher(Twist, "net_force", qos_profile_system_default)
-        self.steadyPub = self.create_publisher(Bool, "steady", qos_profile_system_default)
-        self.accelPub = self.create_publisher(Twist, "requested_accel", qos_profile_system_default)
-
-        # setup all subscribers
-        self.subs = []
-        self.subs.append(self.create_subscription(Odometry, "odometry/filtered", self.updateState, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Quaternion, "orientation", self.angularController.setTargetPosition, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Vector3, "angular_velocity", self.angularController.setTargetVelocity, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Empty, "disable_angular", self.angularController.disable, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Vector3, "position", self.linearController.setTargetPosition, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Vector3, "linear_velocity", self.linearController.setTargetVelocity, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Empty, "disable_linear", self.linearController.disable, qos_profile_system_default))
-        self.subs.append(self.create_subscription(Empty, "off", self.turnOff, qos_profile_system_default))
-        self.subs.append(self.create_subscription(RobotState, "state/robot", self.switch_cb, qos_profile_sensor_data))
-
-        #create an action server
-        self._as = ActionServer(self, FollowTrajectory, "follow_trajectory", self.trajectory_callback)
-
-        self.get_logger().info("Riptide controller initalized")
+        self.get_logger().info(f"Riptide controller initalized with params {config}")
 
     def parameters_callback(self, params):
         success = True
         for param in params:
-            if param.name == "maximum_linear_velocity":
-                self.linearController.maxVelocity = param.value
-            elif param.name == "maximum_linear_acceleration":
-                self.linearController.maxAccel = param.value
-            elif param.name == "maximum_angular_velocity":
-                self.angularController.maxVelocity = param.value
-            elif param.name == "maximum_angular_acceleration":
-                self.angularController.maxAccel = param.value
-            elif param.name == "linear_position_p":
-                self.linearController.positionP = param.value
-            elif param.name == "linear_velocity_p":
-                self.linearController.velocityP = param.value
-            elif param.name == "angular_position_p":
-                self.angularController.positionP = param.value
-            elif param.name == "angular_velocity_p":
-                self.angularController.velocityP = param.value
-            elif param.name == "linear_damping":
-                self.accelerationCalculator.linearDrag = param.value
-            elif param.name == "quadratic_damping":
-                self.accelerationCalculator.quadraticDrag = param.value
-            elif param.name == "maximum_linear_velocity":
-                self.linearController.maxVelocity = param.value
-            elif param.name == "maximum_linear_acceleration":
-                self.linearController.maxAccel = param.value
-            elif param.name == "maximum_angular_velocity":
-                self.angularController.maxVelocity = param.value
-            elif param.name == "maximum_angular_acceleration":
-                self.angularController.maxAccel = param.value
+            self.get_logger().info(f"updating {param.name} to {param.value}")
+            if param.name == "maximum_linear_velocity_x":
+                self.linearController.maxVelocity[0] = param.value
+            elif param.name == "maximum_linear_velocity_y":
+                self.linearController.maxVelocity[1] = param.value
+            elif param.name == "maximum_linear_velocity_z":
+                self.linearController.maxVelocity[2] = param.value
+            elif param.name == "maximum_linear_acceleration_x":
+                self.linearController.maxAccel[0] = param.value
+            elif param.name == "maximum_linear_acceleration_y":
+                self.linearController.maxAccel[1] = param.value
+            elif param.name == "maximum_linear_acceleration_z":
+                self.linearController.maxAccel[2] = param.value
+            elif param.name == "maximum_angular_velocity_x":
+                self.angularController.maxVelocity[0] = param.value
+            elif param.name == "maximum_angular_velocity_y":
+                self.angularController.maxVelocity[1] = param.value
+            elif param.name == "maximum_angular_velocity_z":
+                self.angularController.maxVelocity[2] = param.value
+            elif param.name == "maximum_angular_acceleration_x":
+                self.angularController.maxAccel[0] = param.value
+            elif param.name == "maximum_angular_acceleration_y":
+                self.angularController.maxAccel[1] = param.value
+            elif param.name == "maximum_angular_acceleration_z":
+                self.angularController.maxAccel[2] = param.value
+            elif param.name == "linear_position_p_x":
+                self.linearController.positionP[0] = param.value
+            elif param.name == "linear_position_p_y":
+                self.linearController.positionP[1] = param.value
+            elif param.name == "linear_position_p_z":
+                self.linearController.positionP[2] = param.value
+            elif param.name == "linear_velocity_p_x":
+                self.linearController.velocityP[0] = param.value
+            elif param.name == "linear_velocity_p_y":
+                self.linearController.velocityP[1] = param.value
+            elif param.name == "linear_velocity_p_z":
+                self.linearController.velocityP[2] = param.value
+            elif param.name == "angular_position_p_x":
+                self.angularController.positionP[0] = param.value
+            elif param.name == "angular_position_p_y":
+                self.angularController.positionP[1] = param.value
+            elif param.name == "angular_position_p_z":
+                self.angularController.positionP[2] = param.value
+            elif param.name == "angular_velocity_p_x":
+                self.angularController.velocityP[0] = param.value
+            elif param.name == "angular_velocity_p_y":
+                self.angularController.velocityP[1] = param.value
+            elif param.name == "angular_velocity_p_z":
+                self.angularController.velocityP[2] = param.value
+            elif param.name == "linear_damping_x":
+                self.accelerationCalculator.linearDrag[0] = param.value
+            elif param.name == "linear_damping_y":
+                self.accelerationCalculator.linearDrag[1] = param.value
+            elif param.name == "linear_damping_z":
+                self.accelerationCalculator.linearDrag[2] = param.value
+            elif param.name == "linear_damping_rot_x":
+                self.accelerationCalculator.linearDrag[3] = param.value
+            elif param.name == "linear_damping_rot_y":
+                self.accelerationCalculator.linearDrag[4] = param.value
+            elif param.name == "linear_damping_rot_z":
+                self.accelerationCalculator.linearDrag[5] = param.value
+            elif param.name == "quadratic_damping_x":
+                self.accelerationCalculator.quadraticDrag[0] = param.value
+            elif param.name == "quadratic_damping_y":
+                self.accelerationCalculator.quadraticDrag[1] = param.value
+            elif param.name == "quadratic_damping_z":
+                self.accelerationCalculator.quadraticDrag[2] = param.value
+            elif param.name == "quadratic_damping_rot_x":
+                self.accelerationCalculator.quadraticDrag[3] = param.value
+            elif param.name == "quadratic_damping_rot_y":
+                self.accelerationCalculator.quadraticDrag[4] = param.value
+            elif param.name == "quadratic_damping_rot_z":
+                self.accelerationCalculator.quadraticDrag[5] = param.value
+            elif param.name == "maximum_linear_velocity_x":
+                self.linearController.maxVelocity[0] = param.value
+            elif param.name == "maximum_linear_velocity_y":
+                self.linearController.maxVelocity[1] = param.value
+            elif param.name == "maximum_linear_velocity_z":
+                self.linearController.maxVelocity[2] = param.value
+            elif param.name == "maximum_linear_acceleration_x":
+                self.linearController.maxAccel[0] = param.value
+            elif param.name == "maximum_linear_acceleration_y":
+                self.linearController.maxAccel[1] = param.value
+            elif param.name == "maximum_linear_acceleration_z":
+                self.linearController.maxAccel[2] = param.value
+            elif param.name == "maximum_angular_velocity_x":
+                self.angularController.maxVelocity[0] = param.value
+            elif param.name == "maximum_angular_velocity_y":
+                self.angularController.maxVelocity[1] = param.value
+            elif param.name == "maximum_angular_velocity_z":
+                self.angularController.maxVelocity[2] = param.value
+            elif param.name == "maximum_angular_acceleration_x":
+                self.angularController.maxAccel[0] = param.value
+            elif param.name == "maximum_angular_acceleration_y":
+                self.angularController.maxAccel[1] = param.value
+            elif param.name == "maximum_angular_acceleration_z":
+                self.angularController.maxAccel[2] = param.value
             elif param.name == "volume":
-                self.accelerationCalculator.buoyancy = np.array([0, 0, param.value * self.accelerationCalculator.density * self.accelerationCalculator.gravity  ])
-            elif param.name == "cob":
-                self.accelerationCalculator.cob = param.value
+                self.accelerationCalculator.buoyancy = np.array([0, 0, param.value * self.accelerationCalculator.density * self.accelerationCalculator.gravity])
+            elif param.name == "cob_x":
+                self.accelerationCalculator.cob[0] = param.value
+            elif param.name == "cob_y":
+                self.accelerationCalculator.cob[1] = param.value
+            elif param.name == "cob_z":
+                self.accelerationCalculator.cob[2] = param.value
             else:
                 success = False
                 
         return SetParametersResult(successful=success)
 
 
-    def updateState(self, odomMsg):        
-        linearAccel = self.linearController.update(odomMsg)
-        angularAccel = self.angularController.update(odomMsg)
-
-        #print(linearAccel, angularAccel)
-
-        accelTwist = Twist()
-        accelTwist.linear = vect3_from_np(linearAccel)
-        accelTwist.angular = vect3_from_np(angularAccel)
-        self.accelPub.publish(accelTwist)
-
-        if np.linalg.norm(linearAccel) > 0 or np.linalg.norm(angularAccel) > 0:
-            self.off = False
-
-        if not self.off:
-            netForce, netTorque = self.accelerationCalculator.accelToNetForce(odomMsg, linearAccel, angularAccel)
-        else:
-            netForce, netTorque = np.zeros(3), np.zeros(3)
-
+    def updateState(self, odomMsg):
+        totalState = JointState()
         isSteady = Bool()
+        forceTwist = Twist()
+
+        self.get_logger().debug('Calculating controller desired accelerations')
+        linearDesiredState = self.linearController.update(odomMsg)
+        angularDesiredState = self.angularController.update(odomMsg)
+
+        totalState.name = [*linearDesiredState.name, *angularDesiredState.name]
+        totalState.position = [*linearDesiredState.position, *angularDesiredState.position]
+        totalState.velocity = [*linearDesiredState.velocity, *angularDesiredState.velocity]
+        totalState.effort = [*linearDesiredState.effort, *angularDesiredState.effort]
+        self.statePub.publish(totalState)
+
         isSteady.data = self.linearController.steady and self.angularController.steady
-        self.steadyPub.publish(isSteady)
 
-        if not np.array_equal(self.lastTorque, netTorque) or \
-           not np.array_equal(self.lastForce, netForce):
-
-            forceTwist = Twist()
+        if(self.linearController.controlMode != ControlMode.DISABLED or self.angularController.controlMode != ControlMode.DISABLED):
+            netForce, netTorque = self.accelerationCalculator.accelToNetForce(odomMsg, np.array(linearDesiredState.effort), np.array(angularDesiredState.effort))
             forceTwist.linear = vect3_from_np(netForce)
             forceTwist.angular = vect3_from_np(netTorque)
-            self.forcePub.publish(forceTwist)
+            self.get_logger().debug('calculated forces with enabled controller')
 
-            self.lastForce = netForce
-            self.lastTorque = netTorque
+        self.steadyPub.publish(isSteady)        
+        self.forcePub.publish(forceTwist)
 
-        self.get_logger().debug("ticked controllers")
+    def setLinear(self, msg : ControllerCommand):
+        self.get_logger().info(f'Setting linear controller to mode {msg.mode}')
+        self.linearController.setTargetPosition(msg.setpoint_vect, ControlMode(msg.mode))
 
-    def trajectory_callback(self, goal_handle):
-        start = self.get_clock().now()
-
-        for point in goal_handle.goal.trajectory.points:
-            # Wait for next point
-            while (self.get_clock().now() - start) < point.time_from_start:
-                time.sleep(0.01)
-
-            self.linear_controller.targetPosition = msgToNumpy(point.transforms[0].translation)
-            self.linear_controller.targetVelocity = msgToNumpy(point.velocities[0].linear)
-            self.linear_controller.targetAcceleration = msgToNumpy(point.accelerations[0].linear)
-            self.angular_controller.targetPosition = msgToNumpy(point.transforms[0].rotation)
-            self.angular_controller.targetVelocity = msgToNumpy(point.velocities[0].angular)
-            self.angular_controller.targetAcceleration = msgToNumpy(point.accelerations[0].angular)
-
-        last_point = goal_handle.goal.trajectory.points[-1]
-        self.linear_controller.setTargetPosition(last_point.transforms[0].translation)
-        self.angular_controller.setTargetPosition(last_point.transforms[0].rotation)
-
-        goal_handle.succeed()
-
-    def turnOff(self, msg=None):
-        self.angularController.disable()
-        self.linearController.disable()
-        self.off = True
+    def setAngular(self, msg : ControllerCommand):
+        self.get_logger().info(f'Setting angular controller to mode {msg.mode}')
+        if(msg.mode == ControllerCommand.POSITION):
+            self.angularController.setTargetPosition(msg.setpoint_quat, ControlMode(msg.mode))
+        else:
+            self.angularController.setTargetPosition(msg.setpoint_vect, ControlMode(msg.mode))
 
     def switch_cb(self, msg : RobotState):
         if not msg.kill_switch_inserted:
-            self.turnOff()
-        pass
+            self.get_logger().warning('Controller output disabled from kill switch assert')
+            self.angularController.setTargetPosition(Vector3(), ControlMode.DISABLED)
+            self.linearController.setTargetPosition(Vector3(), ControlMode.DISABLED)
+        
 
 def main(args=None):
     rclpy.init(args=args)

@@ -1,9 +1,10 @@
+from enum import Enum
+from ossaudiodev import control_labels
 import numpy as np
-# import transforms3d as tf3d
 from abc import ABC, abstractmethod
 from nav_msgs.msg import Odometry
-# from transforms3d._gohlketransforms import quaternion_slerp
-from  tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_slerp
+from sensor_msgs.msg import JointState
+from tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_conjugate
 
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
@@ -26,11 +27,9 @@ def worldToBody(orientation, vector):
     """
 
     vector = np.append(vector, 0)
-    # orientationInv = tf3d.quaternions.qinverse(orientation)
     orientationInv = quaternion_inverse(orientation)
-    # newVector = tf3d.quaternions.qmult(orientationInv, tf3d.quaternions.qmult(vector, orientation))
     newVector = quaternion_multiply(orientationInv, quaternion_multiply(vector, orientation))
-    return newVector[:3]
+    return np.array(newVector[:3])
 
 def applyMax(vector, max_vector):
     """ 
@@ -54,24 +53,23 @@ def applyMax(vector, max_vector):
 
     return vector * scale
 
-# def slerp(one, two, t):
-#     """Spherical Linear intERPolation."""
-#     return tf3d.quaternions.qmult(tf3d.quaternions.qmult(two, tf3d.quaternions.qinverse(one))**t, one)
-
+class ControlMode(Enum):
+    DISABLED = 0
+    FEEDFORWARD = 1
+    VELOCITY = 2
+    POSITION = 3
 
 class CascadedPController(ABC):
 
     def __init__(self):
-        self.targetPosition = None
-        self.targetVelocity = None
-        self.targetAcceleration = None
+        self.controlMode = ControlMode.DISABLED
+        self.setPoint = np.zeros(3)
         self.positionP = np.zeros(3)
         self.velocityP = np.zeros(3)
         self.maxVelocity = np.zeros(3)
         self.maxAccel = np.zeros(3)
-        self.steadyVelThresh = 0.00001
-        self.steadyAccelThresh = 0.00001
         self.steady = True
+        self.name = ''
 
     @abstractmethod
     def computeCorrectiveVelocity(self, odom: Odometry):
@@ -106,7 +104,7 @@ class CascadedPController(ABC):
         """
         pass
 
-    def setTargetPosition(self, targetPosition):
+    def setTargetPosition(self, target, mode: ControlMode):
         """ 
         Sets target position
     
@@ -117,40 +115,10 @@ class CascadedPController(ABC):
 
         """
 
-        self.targetPosition = msgToNumpy(targetPosition)
-        # Zeros here because we want velocity correction to 
-        # still happen but don't want it to hold a velocity
-        self.targetVelocity = np.zeros(3)
-        self.targetAcceleration = None
+        self.setPoint = msgToNumpy(target)
+        self.controlMode = mode
 
-    def setTargetVelocity(self, targetVelocity):
-        """ 
-        Sets target velocity
-    
-        Puts the controller in the Velocity state and sets self.targetVelocity to targetVelocity
-    
-        Parameters:
-        targetVelocity (np.array): Body-frame vector to be achieved by the controller
-
-        """
-
-        self.targetPosition = None
-        self.targetVelocity = msgToNumpy(targetVelocity)
-        self.targetAcceleration = None
-    
-    def disable(self, msg=None):
-        """ 
-        Disables the controller
-    
-        Puts the controller in the Disabled state
-
-        """
-
-        self.targetPosition = None
-        self.targetVelocity = None
-        self.targetAcceleration = None
-
-    def update(self, odom: Odometry):
+    def update(self, odom: Odometry) -> JointState:
         """ 
         Updates the controller
     
@@ -163,103 +131,119 @@ class CascadedPController(ABC):
         np.array: 3 dimensional vector representing net body-frame acceleration.
 
         """
-
+        state = JointState()
+        state.name = [self.name+'_x', self.name+'_y', self.name+'_z']
         netAccel = np.zeros(3)
+        correctiveVelocity = np.zeros(3)
 
-        if self.targetPosition is not None or self.targetVelocity is not None:
+        if(self.controlMode == ControlMode.POSITION or self.controlMode == ControlMode.VELOCITY):
             correctiveVelocity = self.computeCorrectiveVelocity(odom)
-            netAccel += self.computeCorrectiveAcceleration(odom, correctiveVelocity)
-
-        if self.targetAcceleration is not None:
-            netAccel += self.targetAcceleration
+            netAccel = self.computeCorrectiveAcceleration(odom, correctiveVelocity)
 
         netAccel = applyMax(netAccel, self.maxAccel)
-        
-        if self.targetAcceleration is not None:                         # Trajectory mode
-            self.steady = False
-        elif self.targetPosition is not None:                           # Position mode
-            self.steady = np.allclose(correctiveVelocity, np.zeros(3), atol=self.steadyVelThresh)
-        elif self.targetVelocity is not None:                           # Velocity mode
-            self.steady = np.allclose(netAccel, np.zeros(3), atol=self.steadyAccelThresh)
+
+        # pack the joint state
+        state.position = self.setPoint.tolist() if self.controlMode == ControlMode.POSITION else np.zeros(3).tolist()
+        state.velocity = self.setPoint.tolist() if self.controlMode == ControlMode.VELOCITY else correctiveVelocity.tolist()
+        state.effort = netAccel.tolist()
+
+        if(self.controlMode == ControlMode.POSITION or self.controlMode == ControlMode.VELOCITY):
+            self.steady = np.allclose(netAccel, np.zeros(3), atol=0.01) and np.allclose(correctiveVelocity, np.zeros(3), atol=0.01)
         else:
             self.steady = True
-
-        return netAccel
+    
+        return state
 
 class LinearCascadedPController(CascadedPController):
 
     def __init__(self):
         super(LinearCascadedPController, self).__init__()
-        self.steadyVelThresh = 0.02
-        self.steadyAccelThresh = 0.02
+        self.name = 'lin'
 
     def computeCorrectiveVelocity(self, odom: Odometry):
-
-        if self.targetPosition is not None:
+        if self.controlMode == ControlMode.POSITION:
             currentPosition = msgToNumpy(odom.pose.pose.position) # [1 0 0]
-            outputVel = (self.targetPosition - currentPosition) * self.positionP # [-1 0 1]
+            outputVel = (self.setPoint - currentPosition) * self.positionP # [-1 0 1]
             orientation = msgToNumpy(odom.pose.pose.orientation)
-            #print("position: {}  vel: {}  orient: {}".format(currentPosition, outputVel, orientation))
             return worldToBody(orientation, outputVel)
         else:
             return np.zeros(3)
 
     def computeCorrectiveAcceleration(self, odom: Odometry, correctiveVelocity):
-
-        if self.targetVelocity is not None:          
-            targetVelocity = self.targetVelocity + correctiveVelocity
-            targetVelocity = applyMax(targetVelocity, self.maxVelocity)
-            currentVelocity = msgToNumpy(odom.twist.twist.linear)
-            outputAccel = (targetVelocity - currentVelocity) * self.velocityP
-            return outputAccel       
-        else:
+        if(self.controlMode == ControlMode.DISABLED or self.controlMode == ControlMode.FEEDFORWARD):
             return np.zeros(3)
+
+        # the target velocity is either the setpoint in velocity control mode, or the corrective velocity if in position mode
+        targetVelocity = self.setPoint if(self.controlMode == ControlMode.VELOCITY) else correctiveVelocity
+        targetVelocity = applyMax(targetVelocity, self.maxVelocity)
+        currentVelocity = msgToNumpy(odom.twist.twist.linear)
+        outputAccel = (targetVelocity - currentVelocity) * self.velocityP
+        return outputAccel      
+        
 
 class AngularCascadedPController(CascadedPController):
 
     def __init__(self):
         super(AngularCascadedPController, self).__init__()
-        self.steadyVelThresh = 0.1
-        self.steadyAccelThresh = 0.1
+        self.name = 'ang'
 
     def computeCorrectiveVelocity(self, odom: Odometry):
-
-        if self.targetPosition is not None:
+        if self.controlMode == ControlMode.POSITION:
             currentOrientation = msgToNumpy(odom.pose.pose.orientation)
 
-            # Below code only works for small angles so lets find an orientation in the right direction but with a small angle
-            intermediateOrientation = quaternion_slerp(currentOrientation, self.targetPosition, 0.01)
-            dq = (intermediateOrientation - currentOrientation)
-            outputVel = np.array(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3]) * self.positionP
-            return outputVel        
+            # NEW Way
+            # based on quadrotor attitude control with a PID controller https://folk.ntnu.no/skoge/prost/proceedings/ecc-2013/data/papers/0927.pdf    
+            errorQuat = quaternion_multiply(self.setPoint, quaternion_conjugate(currentOrientation))
+            if errorQuat[3] < 0:
+                errorQuat = quaternion_conjugate(errorQuat)
+                
+            return np.array(errorQuat[:3]) * self.positionP
+
+            # OLD WAY, only works to find a direction, causes high gains in position
+            # # Find an orientation in the right direction but with a small angle
+            # intermediateOrientation = quaternion_slerp(currentOrientation, self.setPoint, 0.01)
+
+            # # This math only works for small angles, so the direction is more important
+            # dq = (intermediateOrientation - currentOrientation)
+            # outputVel = np.array(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3]) * self.positionP
+            # return outputVel 
         else:
             return np.zeros(3)
 
     def computeCorrectiveAcceleration(self, odom, correctiveVelocity):
-
-        if self.targetVelocity is not None:   
-            targetVelocity = self.targetVelocity + correctiveVelocity
-            for i in range(3):
-                if abs(targetVelocity[i]) > self.maxVelocity[i]:
-                    targetVelocity[i] = self.maxVelocity[i] * targetVelocity[i] / abs(targetVelocity[i])           
-            currentVelocity = msgToNumpy(odom.twist.twist.angular)
-            outputAccel = (targetVelocity - currentVelocity) * self.velocityP
-            return outputAccel       
-        else:
+        if(self.controlMode == ControlMode.DISABLED or self.controlMode == ControlMode.FEEDFORWARD):
             return np.zeros(3)
+
+        # the target velocity is either the setpoint in velocity control mode, or the corrective velocity if in position mode
+        targetVelocity = self.setPoint if(self.controlMode == ControlMode.VELOCITY) else correctiveVelocity
+        targetVelocity = applyMax(targetVelocity, self.maxVelocity)   
+        currentVelocity = msgToNumpy(odom.twist.twist.angular)
+        outputAccel = (targetVelocity - currentVelocity) * self.velocityP
+        return outputAccel 
 
 class AccelerationCalculator:
     def __init__(self, config):
-        self.mass = np.array(config["mass"])
-        self.com = np.array(config["com"])
-        self.inertia = np.array(config["inertia"])
-        self.linearDrag = np.zeros(6)
-        self.quadraticDrag = np.zeros(6)
-        self.volume = np.array(config["volume"])
-        self.cob = np.zeros(3)
+        # general constants
         self.gravity = 9.8 # (m/sec^2)
         self.density = 1000 # density of water (kg/m^3)
-        self.buoyancy = np.zeros(3)
+
+        # Vehicle mass properties
+        self.com = np.array(config["com"])
+        self.mass = np.array(config["mass"])
+        self.inertia = np.array(config["inertia"])
+
+        # Bouyancy force calculation
+        self.cob = np.array(config["cob"])
+        self.volume = np.array(config["volume"])
+        self.buoyancy = np.array([0, 0, self.volume * self.density * self.gravity])
+        
+        # damping force coeficients
+        controller = config['controller']
+        self.linearDrag = np.array([*controller['linear']['damping']['linear'], *controller['angular']['damping']['linear']])
+        self.quadraticDrag = np.array([*controller['linear']['damping']['quadratic'], *controller['angular']['damping']['quadratic']])
+
+        # maximum thruster force that we can request in any direction
+        self.maxForce = 4 * config['thruster']["max_force"]
 
     def accelToNetForce(self, odom, linearAccel, angularAccel):
         """ 
@@ -282,20 +266,31 @@ class AccelerationCalculator:
         angularVelo = msgToNumpy(odom.twist.twist.angular)
         orientation = msgToNumpy(odom.pose.pose.orientation)
 
-        # Force & Torque Initialization
+        # Requested force and torque on the body from controllers
         netForce = linearAccel * self.mass
         netTorque = angularAccel * self.inertia
         
-        # Forces and Torques Calculation
+        # calaculation of bouyancy forces
         bodyFrameBuoyancy = worldToBody(orientation, self.buoyancy)
         buoyancyTorque = np.cross((self.cob-self.com), bodyFrameBuoyancy)
+
+        # Torque due to gyroscopic precession on the the current rotation of the vehicle
         precessionTorque = -np.cross(angularVelo, (self.inertia * angularVelo))
+
+        # calculation of the forces due to drag applied on the body
         dragForce = self.linearDrag[:3] * linearVelo + self.quadraticDrag[:3] * abs(linearVelo) * linearVelo
         dragTorque = self.linearDrag[3:] * angularVelo + self.quadraticDrag[3:] * abs(angularVelo) * angularVelo
+
+        # calculation of the gravitational force in the body frame
         gravityForce = worldToBody(orientation, np.array([0, 0, - self.gravity * self.mass]))
                 
         # Net Calculation
         netForce = netForce - bodyFrameBuoyancy - dragForce - gravityForce
         netTorque = netTorque - buoyancyTorque - precessionTorque - dragTorque
+        
+        # make sure the force doesnt exceed maximums of the vehicle
+        # THIS IS CURRENTLY DISABLE AS THIS IS AN ARBITRARY LIMIT
+        # if(np.linalg.norm(netForce) > self.maxForce):
+        #     netForce = netForce / np.linalg.norm(netForce) * self.maxForce
 
         return netForce, netTorque
