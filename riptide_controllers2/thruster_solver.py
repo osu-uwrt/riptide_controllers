@@ -17,14 +17,14 @@ import rclpy
 from rclpy.node import Node
 from rclpy.duration import Duration
 from rclpy.time import Time
-from rclpy.qos import qos_profile_system_default # can replace this with others
+from rclpy.qos import qos_profile_system_default, qos_profile_sensor_data# can replace this with others
 
 from tf2_ros import TransformException
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 from geometry_msgs.msg import Twist
-from riptide_msgs2.msg import PwmStamped
+from riptide_msgs2.msg import PwmStamped, FirmwareState
 from std_msgs.msg import Float32MultiArray
 
 import numpy as np
@@ -44,10 +44,12 @@ class ThrusterSolverNode(Node):
     def __init__(self):
         super().__init__('riptide_controllers2')
 
-        self.create_subscription(Twist, "net_force", self.force_cb, qos_profile_system_default)
+        self.create_subscription(Twist, "controller/body_force", self.force_cb, qos_profile_system_default)
 
-        self.thruster_pub = self.create_publisher( Float32MultiArray, "thruster_forces", qos_profile_system_default)
+        self.thruster_pub = self.create_publisher(Float32MultiArray, "thruster_forces", qos_profile_system_default)
         self.pwm_pub = self.create_publisher(PwmStamped ,"command/pwm", qos_profile_system_default)
+        self.enabledSub = self.create_subscription(FirmwareState, "state/firmware", self.firmware_cb, qos_profile_sensor_data)
+
         self.declare_parameter("robot", "")
         self.tf_namespace = self.get_parameter("robot").value
 
@@ -79,13 +81,12 @@ class ThrusterSolverNode(Node):
 
             self.thruster_types[i] = config_file["thrusters"][i]["type"]   
 
-
-
         self.initial_condition = []
         self.bounds = []
         for i in range(len(thruster_info)):
             self.initial_condition.append(0)
             self.bounds.append((-self.max_force, self.max_force))
+            
         self.initial_condition = tuple(self.initial_condition)
         self.bounds = tuple(self.bounds)
 
@@ -99,14 +100,20 @@ class ThrusterSolverNode(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self.WATER_LEVEL = 0
+        
+        self.enabled = False
+        
+    def firmware_cb(self, msg: FirmwareState):
+        self.enabled = msg.kill_switches_asserting_kill == 0 and msg.kill_switches_timed_out == 0
 
     def publish_pwm(self, forces):
         pwm_values = []
 
         for i in range(self.thruster_coeffs.shape[0]):
             pwm = NEUTRAL_PWM
-
-            if (abs(forces[i]) < self.pwm_file["MIN_THRUST"]):
+               
+            # robot is killed or no force is needed
+            if(not self.enabled or abs(forces[i]) < self.pwm_file["MIN_THRUST"]):
                 pwm = NEUTRAL_PWM
 
             elif (forces[i] > 0 and forces[i] <= self.pwm_file["STARTUP_THRUST"]):
@@ -192,6 +199,7 @@ class ThrusterSolverNode(Node):
         return total_cost_jac
 
     def force_cb(self, msg):
+        
         desired_state = np.zeros(6)
         desired_state[:3] = msgToNumpy(msg.linear)
         desired_state[3:] = msgToNumpy(msg.angular)
@@ -200,9 +208,13 @@ class ThrusterSolverNode(Node):
         res = minimize(self.total_cost, self.initial_condition, args=(desired_state), method='SLSQP', \
                         jac=self.total_cost_jac, bounds=self.bounds)
 
-        # Warn if we did not find valid thruster forces
-        if self.force_cost(res.x, desired_state) > 0.05 or not res.success:
-            self.get_logger().warning("Unable to exert requested force")
+        if(self.enabled):
+            # Warn if we did not find valid thruster forces
+            fcost = self.force_cost(res.x, desired_state)
+            if(fcost > 0.05):
+                self.get_logger().warning(f"Unable to exert force, cost {round(fcost)} > 0.05 solution: {res.x}, des_state{desired_state}")
+            elif(not res.success):
+                self.get_logger().warning("Unable to exert requested force, could not solve jacobean")
 
         data = []
         for val in res.x :
