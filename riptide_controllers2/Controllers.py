@@ -188,15 +188,6 @@ class AngularCascadedPController(CascadedPController):
         self.name = 'ang'
 
     def computeCorrectiveVelocity(self, odom: Odometry):
-        if self.targetPosition is not None:
-            currentOrientation = msgToNumpy(odom.pose.pose.orientation)
-
-            # Below code only works for small angles so lets find an orientation in the right direction but with a small angle
-            intermediateOrientation = quaternion_slerp(currentOrientation, self.targetPosition, 0.01)
-            dq = (intermediateOrientation - currentOrientation)
-            outputVel = np.array(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3]) * self.positionP
-            return outputVel        
-        
         if self.controlMode == ControlMode.POSITION:
             currentOrientation = msgToNumpy(odom.pose.pose.orientation)
 
