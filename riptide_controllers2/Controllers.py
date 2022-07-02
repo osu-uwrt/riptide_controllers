@@ -6,7 +6,6 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
 from tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_conjugate, quaternion_slerp
 
-
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
         return np.array([msg.x, msg.y, msg.z, msg.w])
@@ -189,6 +188,15 @@ class AngularCascadedPController(CascadedPController):
         self.name = 'ang'
 
     def computeCorrectiveVelocity(self, odom: Odometry):
+        if self.targetPosition is not None:
+            currentOrientation = msgToNumpy(odom.pose.pose.orientation)
+
+            # Below code only works for small angles so lets find an orientation in the right direction but with a small angle
+            intermediateOrientation = quaternion_slerp(currentOrientation, self.targetPosition, 0.01)
+            dq = (intermediateOrientation - currentOrientation)
+            outputVel = np.array(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3]) * self.positionP
+            return outputVel        
+        
         if self.controlMode == ControlMode.POSITION:
             currentOrientation = msgToNumpy(odom.pose.pose.orientation)
 
