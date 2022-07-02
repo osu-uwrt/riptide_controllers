@@ -2,8 +2,13 @@ import numpy as np
 # import transforms3d as tf3d
 from abc import ABC, abstractmethod
 from nav_msgs.msg import Odometry
+<<<<<<< Updated upstream
 # from transforms3d._gohlketransforms import quaternion_slerp
 from  tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_slerp
+=======
+from sensor_msgs.msg import JointState
+from tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_conjugate, quaternion_slerp
+>>>>>>> Stashed changes
 
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
@@ -223,6 +228,7 @@ class AngularCascadedPController(CascadedPController):
         self.steadyAccelThresh = 0.1
 
     def computeCorrectiveVelocity(self, odom: Odometry):
+<<<<<<< Updated upstream
 
         if self.targetPosition is not None:
             currentOrientation = msgToNumpy(odom.pose.pose.orientation)
@@ -232,6 +238,27 @@ class AngularCascadedPController(CascadedPController):
             dq = (intermediateOrientation - currentOrientation)
             outputVel = np.array(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3]) * self.positionP
             return outputVel        
+=======
+        if self.controlMode == ControlMode.POSITION:
+            currentOrientation = msgToNumpy(odom.pose.pose.orientation)
+
+            # NEW Way
+            # based on quadrotor attitude control with a PID controller https://folk.ntnu.no/skoge/prost/proceedings/ecc-2013/data/papers/0927.pdf    
+            # errorQuat = quaternion_multiply(self.setPoint, quaternion_conjugate(currentOrientation))
+            # if errorQuat[3] < 0:
+            #     errorQuat = quaternion_conjugate(errorQuat)
+                
+            # return np.array(errorQuat[:3]) * self.positionP
+
+            # OLD WAY, only works to find a direction, causes high gains in position
+            # # Find an orientation in the right direction but with a small angle
+            intermediateOrientation = quaternion_slerp(currentOrientation, self.setPoint, 0.01)
+
+            # This math only works for small angles, so the direction is more important
+            dq = (intermediateOrientation - currentOrientation)
+            outputVel = np.array(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3]) * self.positionP
+            return outputVel 
+>>>>>>> Stashed changes
         else:
             return np.zeros(3)
 
