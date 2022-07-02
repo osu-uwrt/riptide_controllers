@@ -4,7 +4,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import JointState
-from tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_conjugate
+from tf_transformations import quaternion_multiply, quaternion_inverse, quaternion_conjugate, quaternion_slerp
 
 def msgToNumpy(msg):
     if hasattr(msg, "w"):
@@ -191,22 +191,14 @@ class AngularCascadedPController(CascadedPController):
         if self.controlMode == ControlMode.POSITION:
             currentOrientation = msgToNumpy(odom.pose.pose.orientation)
 
-            # NEW Way
-            # based on quadrotor attitude control with a PID controller https://folk.ntnu.no/skoge/prost/proceedings/ecc-2013/data/papers/0927.pdf    
-            errorQuat = quaternion_multiply(self.setPoint, quaternion_conjugate(currentOrientation))
-            if errorQuat[3] < 0:
-                errorQuat = quaternion_conjugate(errorQuat)
-                
-            return np.array(errorQuat[:3]) * self.positionP
-
             # OLD WAY, only works to find a direction, causes high gains in position
-            # # Find an orientation in the right direction but with a small angle
-            # intermediateOrientation = quaternion_slerp(currentOrientation, self.setPoint, 0.01)
+            # Find an orientation in the right direction but with a small angle
+            intermediateOrientation = quaternion_slerp(currentOrientation, self.setPoint, 0.01)
 
-            # # This math only works for small angles, so the direction is more important
-            # dq = (intermediateOrientation - currentOrientation)
-            # outputVel = np.array(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3]) * self.positionP
-            # return outputVel 
+            # This math only works for small angles, so the direction is more important
+            dq = (intermediateOrientation - currentOrientation)
+            outputVel = np.array(quaternion_multiply(quaternion_inverse(currentOrientation), dq)[:3]) * self.positionP
+            return outputVel 
         else:
             return np.zeros(3)
 
