@@ -92,7 +92,7 @@ class ControllerNode(Node):
         self.subs.append(self.create_subscription(ControllerCommand, "controller/angular", self.setAngular, qos_profile_system_default))
         
         # state information
-        self.subs.append(self.create_subscription(RobotState, "state/firmware", self.switch_cb, qos_profile_sensor_data))
+        self.subs.append(self.create_subscription(RobotState, "state/robot", self.switch_cb, qos_profile_sensor_data))
 
         # declare the configuration data
         self.declare_parameters(
