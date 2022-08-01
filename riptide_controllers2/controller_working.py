@@ -286,11 +286,15 @@ class ControllerNode(Node):
         self.forcePub.publish(forceTwist)
 
     def setLinear(self, msg : ControllerCommand):
-        self.get_logger().info(f'Setting linear controller to mode {msg.mode}')
+        if self.angularController.controlMode != ControlMode(msg.mode) and self.linearController.controlMode != ControlMode(msg.mode) :
+            self.get_logger().info(f'Setting linear controller to mode {msg.mode}')
+            
         self.linearController.setTargetPosition(msg.setpoint_vect, ControlMode(msg.mode))
 
     def setAngular(self, msg : ControllerCommand):
-        self.get_logger().info(f'Setting angular controller to mode {msg.mode}')
+        if self.angularController.controlMode != ControlMode(msg.mode) and self.linearController.controlMode != ControlMode(msg.mode):
+            self.get_logger().info(f'Setting angular controller to mode {msg.mode}')
+            
         if(msg.mode == ControllerCommand.POSITION):
             self.angularController.setTargetPosition(msg.setpoint_quat, ControlMode(msg.mode))
         else:
@@ -298,7 +302,9 @@ class ControllerNode(Node):
 
     def switch_cb(self, msg : RobotState):
         if not msg.kill_switch_inserted:
-            self.get_logger().warning('Controller output disabled from kill switch assert')
+            if self.angularController.controlMode != ControllerCommand.DISABLED and self.linearController.controlMode != ControllerCommand.DISABLED:
+                self.get_logger().warning('Controller output disabled from kill switch assert')
+                
             self.angularController.setTargetPosition(Vector3(), ControlMode.DISABLED)
             self.linearController.setTargetPosition(Vector3(), ControlMode.DISABLED)
         
