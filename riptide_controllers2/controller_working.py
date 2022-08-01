@@ -302,7 +302,7 @@ class ControllerNode(Node):
 
     def switch_cb(self, msg : RobotState):
         if not msg.kill_switch_inserted:
-            if self.angularController.controlMode != ControllerCommand.DISABLED and self.linearController.controlMode != ControllerCommand.DISABLED:
+            if self.angularController.controlMode != ControlMode.DISABLED or self.linearController.controlMode != ControlMode.DISABLED:
                 self.get_logger().warning('Controller output disabled from kill switch assert')
                 
             self.angularController.setTargetPosition(Vector3(), ControlMode.DISABLED)
