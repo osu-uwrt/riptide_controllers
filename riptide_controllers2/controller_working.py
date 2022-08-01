@@ -286,13 +286,13 @@ class ControllerNode(Node):
         self.forcePub.publish(forceTwist)
 
     def setLinear(self, msg : ControllerCommand):
-        if self.angularController.controlMode != ControlMode(msg.mode) and self.linearController.controlMode != ControlMode(msg.mode) :
+        if self.linearController.controlMode != ControlMode(msg.mode):
             self.get_logger().info(f'Setting linear controller to mode {msg.mode}')
             
         self.linearController.setTargetPosition(msg.setpoint_vect, ControlMode(msg.mode))
 
     def setAngular(self, msg : ControllerCommand):
-        if self.angularController.controlMode != ControlMode(msg.mode) and self.linearController.controlMode != ControlMode(msg.mode):
+        if self.angularController.controlMode != ControlMode(msg.mode):
             self.get_logger().info(f'Setting angular controller to mode {msg.mode}')
             
         if(msg.mode == ControllerCommand.POSITION):
