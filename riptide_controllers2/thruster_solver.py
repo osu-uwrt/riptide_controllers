@@ -168,7 +168,7 @@ class ThrusterSolverNode(Node):
         except Exception as ex:
             # Supress startup errors
             if (self.get_clock().now() - self.start_time) > Duration(seconds=1.0):
-                self.get_logger().fatal(str(ex))
+                self.get_logger().error(str(ex))
 
     # Cost function forcing the thruster to output desired net force
     def force_cost(self, thruster_forces, desired_state):
