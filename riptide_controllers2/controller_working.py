@@ -143,7 +143,7 @@ class ControllerNode(Node):
         # initialize reconfigure
         self.add_on_set_parameters_callback(self.parameters_callback)
 
-        self.get_logger().info(f"Riptide controller initalized with params {config}")
+        # self.get_logger().info(f"Riptide controller initalized with params {config}")
 
     def parameters_callback(self, params):
         success = True
