@@ -47,48 +47,4 @@ def generate_launch_description():
                 {"robot": robot},
             ]
         ),
-
-        # launch_ros.actions.Node(
-        #     package="riptide_controllers2",
-        #     executable="thruster_wrench_publisher",
-        #     name="thruster_wrench_publisher",
-        #     output="screen",
-        #     parameters=[
-        #         {"vehicle_config": config},
-        #         {"robot": robot},
-        #     ]
-        # ),
-
-        # launch_ros.actions.Node(
-        #     package="riptide_controllers2",
-        #     executable="thruster_test",
-        #     name="thruster_test",
-        #     output="screen",
-        #     parameters=[
-        #         {"vehicle_config": config},
-        #         {"robot": robot},
-        #     ]
-        # ),
-
-        # launch_ros.actions.Node(
-        #     package="riptide_controllers2",
-        #     executable="calibrate_buoyancy",
-        #     name="calibrate_buoyancy",
-        #     output="screen",
-        #     parameters=[
-        #         {"vehicle_config": config},
-        #         {"robot": robot},
-        #     ]
-        # ),
-
-        # launch_ros.actions.Node(
-        #     package="riptide_controllers2",
-        #     executable="calibrate_drag",
-        #     name="calibrate_drag",
-        #     output="screen",
-        #     parameters=[
-        #         {"vehicle_config": config},
-        #         {"robot": robot},
-        #     ]
-        # ),
     ])
